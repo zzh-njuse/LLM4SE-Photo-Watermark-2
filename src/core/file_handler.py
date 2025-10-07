@@ -73,6 +73,15 @@ class FileHandler:
             if output_dir and not os.path.exists(output_dir):
                 os.makedirs(output_dir)
             
+            # 根据指定的格式更新文件扩展名
+            if format:
+                base_name, _ = os.path.splitext(output_path_str)
+                if format.upper() == 'PNG':
+                    output_path_str = f"{base_name}.png"
+                elif format.upper() in ['JPEG', 'JPG']:
+                    output_path_str = f"{base_name}.jpg"
+                print(f"根据格式更新文件路径: {output_path_str}")
+            
             # 直接保存 - 测试显示这种方式在Windows上可以处理中文路径
             if format:
                 image.save(output_path_str, format=format, quality=quality)
@@ -91,7 +100,18 @@ class FileHandler:
             print(f"异常类型: {type(e).__name__}")
             # 尝试降级方案：使用临时文件名然后重命名
             try:
-                temp_path = os.path.join(os.path.dirname(output_path_str), "temp_img_" + str(os.getpid()) + ".tmp")
+                # 降级方案中也需要更新临时文件的扩展名
+                temp_base = "temp_img_" + str(os.getpid())
+                if format:
+                    if format.upper() == 'PNG':
+                        temp_path = os.path.join(os.path.dirname(output_path_str), temp_base + ".png")
+                    elif format.upper() in ['JPEG', 'JPG']:
+                        temp_path = os.path.join(os.path.dirname(output_path_str), temp_base + ".jpg")
+                    else:
+                        temp_path = os.path.join(os.path.dirname(output_path_str), temp_base + ".tmp")
+                else:
+                    temp_path = os.path.join(os.path.dirname(output_path_str), temp_base + ".tmp")
+                
                 print(f"尝试临时文件方案: {temp_path}")
                 
                 if format:
@@ -112,13 +132,16 @@ class FileHandler:
                 return False
     
     @staticmethod
-    def generate_output_filename(original_path: str, output_dir: str, suffix: str = "_watermark") -> str:
+    def generate_output_filename(original_path: str, output_dir: str, naming_rule: str = "suffix", 
+                               prefix: str = "wm_", suffix: str = "_watermark") -> str:
         """
         根据原文件名生成输出文件名
         
         Args:
             original_path: 原始文件路径
             output_dir: 输出目录
+            naming_rule: 命名规则 ("original": 保留原文件名, "prefix": 添加前缀, "suffix": 添加后缀)
+            prefix: 添加到文件名的前缀
             suffix: 添加到文件名的后缀
             
         Returns:
@@ -128,14 +151,28 @@ class FileHandler:
             # 确保所有路径参数都是字符串类型
             original_path_str = str(original_path)
             output_dir_str = str(output_dir)
+            naming_rule_str = str(naming_rule)
+            prefix_str = str(prefix)
             suffix_str = str(suffix)
             
             # 安全地获取文件名部分
             base_name = os.path.basename(original_path_str)
             base_name_without_ext, ext = os.path.splitext(base_name)
             
-            # 生成新文件名
-            new_name = f"{base_name_without_ext}{suffix_str}{ext}"
+            # 根据命名规则生成新文件名
+            new_name = ""
+            if naming_rule_str == "original":
+                # 保留原文件名
+                new_name = base_name
+            elif naming_rule_str == "prefix":
+                # 添加前缀
+                new_name = f"{prefix_str}{base_name}"
+            elif naming_rule_str == "suffix":
+                # 添加后缀
+                new_name = f"{base_name_without_ext}{suffix_str}{ext}"
+            else:
+                # 默认使用后缀
+                new_name = f"{base_name_without_ext}{suffix_str}{ext}"
             
             # 确保路径分隔符正确
             output_path = os.path.join(output_dir_str, new_name)

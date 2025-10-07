@@ -78,6 +78,24 @@ class Toolbar(QWidget):
                 return
             image_paths = image_list_panel.image_paths.copy()
         
+        # 显示导出设置对话框
+        from src.gui.export_dialog import ExportDialog
+        # 获取当前设置面板中的默认格式
+        default_format = "PNG"
+        if hasattr(settings_panel, 'format_combo'):
+            default_format = settings_panel.format_combo.currentText()
+            
+        export_dialog = ExportDialog(self, default_format=default_format)
+        if export_dialog.exec_() != ExportDialog.Accepted:
+            return  # 用户取消了导出
+        
+        # 获取导出设置
+        export_settings = export_dialog.get_settings()
+        output_format = export_settings['format'].lower()
+        naming_rule = export_settings['naming_rule']
+        prefix = export_settings['prefix']
+        suffix = export_settings['suffix']
+        
         # 选择输出文件夹
         from PyQt5.QtWidgets import QFileDialog, QMessageBox
         import os
@@ -91,20 +109,30 @@ class Toolbar(QWidget):
         if not output_dir:
             return
         
-        # 确保输出文件夹不是原始图片所在的文件夹
-        if batch_mode == "所有图片" and image_list_panel and image_paths:
-            # 获取第一张图片的目录作为参考
-            first_img_dir = os.path.dirname(image_paths[0])
-            if output_dir == first_img_dir:
-                reply = QMessageBox.question(self, "确认导出", 
-                                           "您正在导出到原始图片所在的文件夹，这可能会覆盖文件。确定继续吗？",
-                                           QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-                if reply != QMessageBox.Yes:
+        # 确保输出文件夹不是原始图片所在的文件夹（更严格的检查）
+        # 对于批量导出，检查所有图片的目录
+        if image_paths:
+            original_dirs = set(os.path.dirname(img_path) for img_path in image_paths)
+            if output_dir in original_dirs:
+                # 对于命名规则为"original"的情况，强制不允许导出到原文件夹
+                if naming_rule == "original":
+                    QMessageBox.warning(self, "导出位置不允许", 
+                                      "使用'保留原文件名'时，不能导出到原始图片所在的文件夹，以防止覆盖原文件。")
                     return
+                # 对于其他命名规则，显示警告
+                else:
+                    reply = QMessageBox.question(self, "确认导出", 
+                                               "您正在导出到原始图片所在的文件夹，这可能会覆盖文件。确定继续吗？",
+                                               QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+                    if reply != QMessageBox.Yes:
+                        return
         
         try:
             # 获取水印设置
             watermark_settings = self._get_watermark_settings(settings_panel)
+            
+            # 更新水印设置中的格式
+            watermark_settings['format'] = export_settings['format']
             
             # 导入必要的模块
             from src.core.image_processor import ImageProcessor
@@ -125,10 +153,10 @@ class Toolbar(QWidget):
                     watermarked_image = self._apply_watermark(image, watermark_settings, settings_panel)
                     
                     # 生成输出文件名
-                    output_path = FileHandler.generate_output_filename(image_path, output_dir, "_watermark")
+                    output_path = FileHandler.generate_output_filename(
+                        image_path, output_dir, naming_rule, prefix, suffix)
                     
-                    # 根据选择的格式进行保存
-                    output_format = watermark_settings['format'].lower()
+                    # 获取质量设置
                     quality = watermark_settings['quality']
                     
                     # 确保在保存前转换为RGB模式，特别是对于JPEG格式
@@ -137,7 +165,8 @@ class Toolbar(QWidget):
                         watermarked_image = ImageProcessor.convert_to_rgb(watermarked_image)
                     
                     # 保存图片
-                    success = FileHandler.save_image(watermarked_image, output_path, output_format.upper(), quality)
+                    success = FileHandler.save_image(
+                        watermarked_image, output_path, output_format.upper(), quality)
                     
                     if success:
                         success_count += 1
@@ -189,69 +218,28 @@ class Toolbar(QWidget):
     
     def _get_watermark_settings(self, settings_panel):
         """从设置面板获取水印设置，优先使用已应用的设置"""
-        # 优先使用已应用的设置
+        # 使用设置面板的get_applied_settings方法，确保使用已应用的设置
         if hasattr(settings_panel, 'get_applied_settings'):
             return settings_panel.get_applied_settings()
         
-        # 备用方案：如果没有已应用的设置，则直接从UI组件获取
-        text = getattr(settings_panel, 'watermark_text', None)
-        text = text.text() if text else ""
+        # 如果没有get_applied_settings方法，回退到使用_get_current_settings
+        elif hasattr(settings_panel, '_get_current_settings'):
+            return settings_panel._get_current_settings()
         
-        font = getattr(settings_panel, 'font_combo', None)
-        font = font.currentText() if font else "Arial"
-        
-        size = getattr(settings_panel, 'size_slider', None)
-        size = size.value() if size else 30
-        
-        opacity = getattr(settings_panel, 'opacity_slider', None)
-        opacity = opacity.value() / 100 if opacity else 0.5  # 转换为0-1范围
-        
-        rotation = getattr(settings_panel, 'rotation_slider', None)
-        rotation = rotation.value() if rotation else 0
-        
-        color_value = getattr(settings_panel, 'color_value', None)
-        color = color_value.text() if color_value else "#FFFFFF"
-        
-        # 获取位置设置
-        h_position = getattr(settings_panel, 'h_position_slider', None)
-        h_position = h_position.value() / 100 if h_position else 0.5  # 转换为0-1范围
-        
-        v_position = getattr(settings_panel, 'v_position_slider', None)
-        v_position = v_position.value() / 100 if v_position else 0.5  # 转换为0-1范围
-        
-        # 获取样式设置
-        style = "single"
-        tile_radio = getattr(settings_panel, 'tile_radio', None)
-        diagonal_radio = getattr(settings_panel, 'diagonal_radio', None)
-        
-        if tile_radio and tile_radio.isChecked():
-            style = "tile"
-        elif diagonal_radio and diagonal_radio.isChecked():
-            style = "diagonal"
-        
-        spacing = getattr(settings_panel, 'spacing_slider', None)
-        spacing = spacing.value() if spacing else 20
-        
-        # 获取输出设置
-        format_combo = getattr(settings_panel, 'format_combo', None)
-        format = format_combo.currentText() if format_combo else "PNG"
-        
-        quality_slider = getattr(settings_panel, 'quality_slider', None)
-        quality = quality_slider.value() if quality_slider else 90
-        
+        # 最后的回退方案
         return {
-            'text': text,
-            'font': font,
-            'size': size,
-            'opacity': opacity,
-            'rotation': rotation,
-            'color': color,
-            'h_position': h_position,
-            'v_position': v_position,
-            'style': style,
-            'spacing': spacing,
-            'format': format,
-            'quality': quality
+            'text': "我的图片",
+            'size': 30,
+            'opacity': 0.5,
+            'rotation': 0,
+            'color': '#FFFFFF',
+            'font': '微软雅黑',
+            'h_position': 0.5,
+            'v_position': 0.5,
+            'style': 'single',
+            'spacing': 50,
+            'format': 'PNG',
+            'quality': 90
         }
     
     def _apply_watermark(self, image, settings, settings_panel):

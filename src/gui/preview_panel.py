@@ -7,17 +7,40 @@ from src.core.image_processor import ImageProcessor
 from src.core.file_handler import FileHandler
 import os
 from io import BytesIO
+import traceback
+
+print("DEBUG: PreviewPanel模块已导入")
 
 class PreviewPanel(QWidget):
     """
     中央预览面板，用于显示原图和水印效果预览
     """
-    def __init__(self):
-        super().__init__()
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.parent = parent
         self.current_image_path = ""
+        self.original_image = None
+        self.watermark_image = None
         # 启用拖放功能
         self.setAcceptDrops(True)
+        
+        # 确保所有属性都已初始化
+        self.effect_preview = None
+        self.original_preview = None
+        
+        # 拖拽相关变量
+        self.is_dragging = False
+        self.last_pos = None
+        self.watermark_rect = None  # 水印在预览图中的矩形区域
+        # 新增属性：跟踪鼠标是否在水印区域上方
+        self._is_mouse_over_watermark = False
+        
+        print("DEBUG: PreviewPanel初始化，设置基本属性，水印矩形区域初始化为None")
+        
         self.init_ui()
+        
+        # 启用鼠标追踪
+        self.setMouseTracking(True)
     
     def init_ui(self):
         """初始化预览面板UI"""
@@ -83,7 +106,7 @@ class PreviewPanel(QWidget):
         self.upload_area.setMinimumHeight(300)
         
         # 将上传区域添加到主布局
-        layout.addWidget(self.upload_area, 1)  # 使用1作为拉伸因子
+        layout.addWidget(self.upload_area, 4)  # 使用4作为拉伸因子
         
         # 创建分割线
         line = QFrame()
@@ -105,12 +128,12 @@ class PreviewPanel(QWidget):
         original_title.setAlignment(Qt.AlignCenter)
         original_title.setStyleSheet("font-weight: bold; background: transparent; border: none;")
         
-        # 设置预览标签的固定大小
+        # 设置预览标签的固定大小 - 放大预览窗口
         self.original_preview = QLabel("上传后显示原图")
         self.original_preview.setAlignment(Qt.AlignCenter)
-        self.original_preview.setFixedSize(350, 250)  # 设置固定大小
+        self.original_preview.setFixedSize(400, 300)  # 放大预览窗口大小
         self.original_preview.setStyleSheet("background-color: #f5f5f5; border-radius: 4px; border: 1px solid #dddddd;")
-        self.original_preview.setScaledContents(False)  # 确保图片不会自动缩放填充整个区域
+        self.original_preview.setScaledContents(True)  # 允许图片自动缩放填充区域
         
         original_layout.addWidget(original_title)
         original_layout.addWidget(self.original_preview, alignment=Qt.AlignCenter)  # 居中显示
@@ -124,12 +147,12 @@ class PreviewPanel(QWidget):
         effect_title.setAlignment(Qt.AlignCenter)
         effect_title.setStyleSheet("font-weight: bold; background: transparent; border: none;")
         
-        # 设置预览标签的固定大小
+        # 设置预览标签的固定大小 - 放大预览窗口
         self.effect_preview = QLabel("此处实时预览效果")
         self.effect_preview.setAlignment(Qt.AlignCenter)
-        self.effect_preview.setFixedSize(350, 250)  # 设置固定大小
+        self.effect_preview.setFixedSize(400, 300)  # 放大预览窗口大小
         self.effect_preview.setStyleSheet("background-color: #f5f5f5; border-radius: 4px; border: 1px solid #dddddd;")
-        self.effect_preview.setScaledContents(False)  # 确保图片不会自动缩放填充整个区域
+        self.effect_preview.setScaledContents(True)  # 允许图片自动缩放填充区域
         
         effect_layout.addWidget(effect_title)
         effect_layout.addWidget(self.effect_preview, alignment=Qt.AlignCenter)  # 居中显示
@@ -138,8 +161,20 @@ class PreviewPanel(QWidget):
         compare_layout.addWidget(original_container, 1)
         compare_layout.addWidget(effect_container, 1)
         
-        # 将预览容器添加到主布局，使用相同的拉伸因子确保高度一致
-        layout.addWidget(preview_container, 1)
+        # 将对比预览容器添加到主布局
+        layout.addWidget(preview_container, 6)  # 使用6作为拉伸因子
+        
+        # 连接鼠标事件
+        print("DEBUG: 连接鼠标事件到效果预览窗口")
+        self.effect_preview.mousePressEvent = self.on_mouse_press
+        self.effect_preview.mouseMoveEvent = self.on_mouse_move
+        self.effect_preview.mouseReleaseEvent = self.on_mouse_release
+        self.effect_preview.mouseDoubleClickEvent = self.on_mouse_double_click
+        # 启用鼠标追踪，确保不按下鼠标也能接收移动事件
+        self.effect_preview.setMouseTracking(True)
+        print("DEBUG: 已启用鼠标追踪")
+        
+
     
     # 拖放事件处理方法
     def dragEnterEvent(self, event):
@@ -240,13 +275,24 @@ class PreviewPanel(QWidget):
             self.original_preview.setText("图片加载失败")
             self.effect_preview.setText("图片加载失败")
     
-    def update_preview(self):
+    def update_preview(self, force_update=False):
         """
         更新预览（例如在应用水印后）
         """
+        print("DEBUG: 开始更新预览，强制更新: %s" % force_update)
+        # 确保effect_preview存在
+        if not hasattr(self, 'effect_preview') or self.effect_preview is None:
+            print("DEBUG: effect_preview不存在，跳过更新")
+            return
+        
         if self.current_image_path:
+            print("DEBUG: 当前图片路径: %s" % self.current_image_path)
             self.set_preview_image(self.current_image_path)
             self.update_watermark_preview()
+            
+        # 强制更新，确保UI组件正确显示
+        self.effect_preview.update()
+        self.effect_preview.repaint()
             
     def update_watermark_preview(self):
         """
@@ -276,9 +322,15 @@ class PreviewPanel(QWidget):
             # 确保图片是RGB模式
             if image.mode != 'RGB':
                 image = image.convert('RGB')
+                
+            # 保存原始图像副本
+            self.original_image = image.copy()
             
-            # 应用水印
-            watermarked = self._apply_watermark(image, settings)
+            # 应用水印，获取水印图片和水印位置信息
+            watermarked, watermark_rect = self._apply_watermark(image, settings)
+            
+            # 保存水印图像
+            self.watermark_image = watermarked.copy()
             
             # 保存水印图片以便调试
             try:
@@ -312,19 +364,119 @@ class PreviewPanel(QWidget):
                     )
                     self.effect_preview.setPixmap(scaled_pixmap)
                     self.effect_preview.setText("")  # 清除文本提示
+                    
+                    # 计算缩放后的水印矩形位置
+                    if watermark_rect:
+                        scale_x = scaled_pixmap.width() / width
+                        scale_y = scaled_pixmap.height() / height
+                        scaled_rect = (watermark_rect[0] * scale_x, watermark_rect[1] * scale_y, 
+                                      watermark_rect[2] * scale_x, watermark_rect[3] * scale_y)
+                        
+                        # 计算相对于预览标签的位置
+                        x_offset = (self.effect_preview.width() - scaled_pixmap.width()) // 2
+                        y_offset = (self.effect_preview.height() - scaled_pixmap.height()) // 2
+                        
+                        self.watermark_rect = (scaled_rect[0] + x_offset, scaled_rect[1] + y_offset, 
+                                              scaled_rect[2], scaled_rect[3])
+                        print(f"DEBUG: 水印矩形区域(预览窗口): {self.watermark_rect}")
+                        print(f"DEBUG: 预览窗口尺寸: {self.effect_preview.width()}x{self.effect_preview.height()}")
+                        print(f"DEBUG: 图片缩放后尺寸: {scaled_pixmap.width()}x{scaled_pixmap.height()}")
+                        print(f"DEBUG: 偏移量: ({x_offset}, {y_offset})")
+                    else:
+                        # 当没有水印矩形时，根据设置的位置参数和水印属性计算更准确的水印判定区域
+                        try:
+                            print("DEBUG: 未获取到水印矩形区域，根据位置设置和水印属性计算临时区域")
+                            
+                            # 获取当前的水印设置
+                            settings = self._get_watermark_settings()
+                            h_position = settings.get('h_position', 0.5)
+                            v_position = settings.get('v_position', 0.5)
+                            text = settings.get('text', 'Watermark')
+                            base_font_size = settings.get('size', 30)
+                            rotation = settings.get('rotation', 0)
+                            
+                            # 计算预览窗口尺寸
+                            window_width = self.effect_preview.width()
+                            window_height = self.effect_preview.height()
+                            
+                            # 计算更准确的水印大小
+                            # 首先估算文本宽度和高度（基于字体大小和文本长度）
+                            text_length = len(str(text))
+                            # 根据字体大小和文本长度估算宽度
+                            estimated_width = max(50, min(int(base_font_size * 0.6 * text_length), window_width // 2))
+                            # 高度通常是字体大小的约1.2倍
+                            estimated_height = max(30, min(int(base_font_size * 1.2), window_height // 2))
+                            
+                            # 如果有旋转，需要考虑旋转后的大小变化
+                            if rotation != 0:
+                                # 旋转会增加所需空间，特别是接近90度时
+                                import math
+                                angle_rad = abs(math.radians(rotation))
+                                # 计算旋转后的最小包围矩形尺寸
+                                rotated_width = int(estimated_width * math.cos(angle_rad) + estimated_height * math.sin(angle_rad))
+                                rotated_height = int(estimated_width * math.sin(angle_rad) + estimated_height * math.cos(angle_rad))
+                                estimated_width = max(estimated_width, rotated_width)
+                                estimated_height = max(estimated_height, rotated_height)
+                            
+                            # 根据位置设置计算水印区域中心
+                            center_x = int(h_position * window_width)
+                            center_y = int(v_position * window_height)
+                            
+                            # 计算水印区域左上角坐标
+                            temp_x = center_x - estimated_width // 2
+                            temp_y = center_y - estimated_height // 2
+                            
+                            # 确保不超出窗口边界
+                            temp_x = max(0, min(temp_x, window_width - estimated_width))
+                            temp_y = max(0, min(temp_y, window_height - estimated_height))
+                            
+                            # 设置临时水印矩形区域
+                            self.watermark_rect = (temp_x, temp_y, estimated_width, estimated_height)
+                            print(f"DEBUG: 根据位置设置({h_position}, {v_position})和水印属性计算的临时水印矩形区域: {self.watermark_rect}")
+                        except Exception as e:
+                            print(f"DEBUG: 计算临时水印矩形区域失败: {e}")
+                            # 降级到简单计算
+                            try:
+                                settings = self._get_watermark_settings()
+                                h_position = settings.get('h_position', 0.5)
+                                v_position = settings.get('v_position', 0.5)
+                                window_width = self.effect_preview.width()
+                                window_height = self.effect_preview.height()
+                                # 根据水印大小设置动态调整判定区域大小
+                                base_size = settings.get('size', 30)
+                                # 大小与字体大小成正比，但有上下限
+                                dynamic_width = max(50, min(int(base_size * 3), window_width // 2))
+                                dynamic_height = max(30, min(int(base_size * 1.5), window_height // 2))
+                                
+                                center_x = int(h_position * window_width)
+                                center_y = int(v_position * window_height)
+                                temp_x = center_x - dynamic_width // 2
+                                temp_y = center_y - dynamic_height // 2
+                                
+                                temp_x = max(0, min(temp_x, window_width - dynamic_width))
+                                temp_y = max(0, min(temp_y, window_height - dynamic_height))
+                                
+                                self.watermark_rect = (temp_x, temp_y, dynamic_width, dynamic_height)
+                                print(f"DEBUG: 使用降级方案计算的临时水印矩形区域: {self.watermark_rect}")
+                            except:
+                                self.watermark_rect = None
                 else:
                     print("没有effect_preview属性")
             except Exception as e:
-                print(f"图像转换为QPixmap失败: {str(e)}")
+                print(f"DEBUG: 图像转换为QPixmap失败: {str(e)}")
+                self.watermark_rect = None
+                print("DEBUG: 水印矩形区域已重置为None")
                 # 降级方案：如果转换失败，直接显示调试图片
                 try:
-                    from PyQt5.QtGui import QPixmap
+                    from PyQt5.QtGui import QPixmap, QImage
                     from PyQt5.QtCore import Qt
                     
-                    if hasattr(self, 'effect_preview'):
-                        debug_pixmap = QPixmap('debug_watermarked.png')
+                    debug_image_path = 'debug_watermarked.png'
+                    if os.path.exists(debug_image_path) and hasattr(self, 'effect_preview'):
+                        print(f"DEBUG: 降级方案：直接加载调试图片 {debug_image_path}")
+                        debug_pixmap = QPixmap(debug_image_path)
                         scaled_pixmap = debug_pixmap.scaled(
-                            350, 250, 
+                            self.effect_preview.size(), 
                             Qt.KeepAspectRatio,
                             Qt.SmoothTransformation
                         )
@@ -332,9 +484,14 @@ class PreviewPanel(QWidget):
                         print("降级方案：直接加载调试图片")
                 except Exception as inner_e:
                     print(f"降级方案也失败: {str(inner_e)}")
+                # 无论如何都设置可拖拽光标
+                if hasattr(self, 'effect_preview'):
+                    self.effect_preview.setCursor(Qt.OpenHandCursor)
         
         except Exception as e:
-            print(f"更新水印预览时出错: {str(e)}")
+            print(f"DEBUG: 更新水印预览时出错: {str(e)}")
+            self.watermark_rect = None
+            print("DEBUG: 水印矩形区域已重置为None")
             # 使用英文错误信息避免编码问题
             if hasattr(self, 'effect_preview'):
                 self.effect_preview.setText("Watermark preview error")
@@ -355,20 +512,279 @@ class PreviewPanel(QWidget):
                     print(f"显示原图失败: {str(inner_e)}")
                     self.effect_preview.setText("无法加载图片")
     
+    def on_mouse_press(self, event):
+        """处理鼠标按下事件"""
+        print(f"DEBUG: 鼠标按下事件触发，按钮: {event.button()}, 位置: ({event.pos().x()}, {event.pos().y()})")
+        
+        # 确保effect_preview存在
+        if not hasattr(self, 'effect_preview') or self.effect_preview is None:
+            print("DEBUG: effect_preview不存在，跳过事件处理")
+            return
+        
+        # 只有左键点击并且在水印区域内才开始拖拽
+        if event.button() == Qt.LeftButton and self._is_point_in_watermark(event.pos()):
+            print("DEBUG: 左键点击水印区域，开始拖拽")
+            # 设置拖拽状态
+            self.is_dragging = True
+            self.last_pos = event.pos()
+            
+            # 更改光标为拖拽状态
+            self.effect_preview.setCursor(Qt.ClosedHandCursor)
+            print("DEBUG: 光标已更改为ClosedHandCursor")
+            
+            # 立即更新一次位置
+            try:
+                # 直接调用update_watermark_position方法
+                self._update_watermark_position(event.pos())
+            except Exception as e:
+                print(f"DEBUG: 点击时更新位置出错: {e}")
+                traceback.print_exc()
+        else:
+            if event.button() == Qt.LeftButton:
+                print("DEBUG: 左键点击但不在水印区域，忽略")
+            else:
+                print("DEBUG: 不是左键点击，忽略")
+    
+    def _update_watermark_position(self, pos):
+        """更新水印位置的辅助方法，实现实时拖拽预览并更新判定区域"""
+        print(f"DEBUG: 更新水印位置，鼠标坐标: ({pos.x()}, {pos.y()})")
+        
+        # 首先检查effect_preview是否存在且有效
+        if not hasattr(self, 'effect_preview') or self.effect_preview is None:
+            print("DEBUG: effect_preview不存在，无法更新位置")
+            return
+        
+        # 获取预览窗口尺寸
+        window_width = self.effect_preview.width()
+        window_height = self.effect_preview.height()
+        mouse_x = pos.x()
+        mouse_y = pos.y()
+        print(f"DEBUG: 预览窗口尺寸: ({window_width}, {window_height})")
+        
+        if window_width <= 0 or window_height <= 0:
+            print("DEBUG: 预览窗口尺寸无效")
+            return
+        
+        # 转换为0-1的坐标比例（更适合直接用于图像绘制）
+        h_ratio = min(1.0, max(0.0, mouse_x / window_width))
+        v_ratio = min(1.0, max(0.0, mouse_y / window_height))
+        print(f"DEBUG: 转换为比例位置: ({h_ratio}, {v_ratio})")
+        
+        # 转换为0-100的百分比整数（用于设置面板）
+        h_percent = int(h_ratio * 100)
+        v_percent = int(v_ratio * 100)
+        print(f"DEBUG: 转换为百分比位置: ({h_percent}, {v_percent})")
+        
+        # 步骤1: 更新设置（确保持久化）
+        try:
+            # 获取当前设置
+            settings = self._get_watermark_settings()
+            
+            # 更新为新位置
+            settings['h_position'] = h_ratio
+            settings['v_position'] = v_ratio
+            print(f"DEBUG: 已更新设置: h_position={h_ratio}, v_position={v_ratio}")
+        except Exception as e:
+            print(f"DEBUG: 更新设置失败: {e}")
+        
+        # 步骤2: 更新设置面板中的位置（持久化设置）
+        # 方式1: 通过main_window获取settings_panel
+        settings_updated = False
+        if hasattr(self, 'main_window') and self.main_window:
+            print("DEBUG: 尝试通过main_window获取settings_panel")
+            if hasattr(self.main_window, 'settings_panel') and self.main_window.settings_panel:
+                settings_panel = self.main_window.settings_panel
+                
+                try:
+                    # 更新水平位置滑块
+                    if hasattr(settings_panel, 'horizontal_position_slider') and settings_panel.horizontal_position_slider:
+                        settings_panel.horizontal_position_slider.setValue(h_percent)
+                        
+                    # 更新垂直位置滑块
+                    if hasattr(settings_panel, 'vertical_position_slider') and settings_panel.vertical_position_slider:
+                        settings_panel.vertical_position_slider.setValue(v_percent)
+                        
+                    print(f"DEBUG: 直接更新settings_panel滑块值: h={h_percent}, v={v_percent}")
+                    settings_updated = True
+                except Exception as e:
+                    print(f"DEBUG: 更新settings_panel滑块失败: {e}")
+                    
+                # 尝试使用预设位置方法
+                if hasattr(settings_panel, 'set_preset_position'):
+                    try:
+                        print(f"DEBUG: 调用main_window.settings_panel.set_preset_position({h_percent}, {v_percent})")
+                        settings_panel.set_preset_position(h_percent, v_percent)
+                        settings_updated = True
+                    except Exception as e:
+                        print(f"DEBUG: 调用set_preset_position失败: {e}")
+            else:
+                print("DEBUG: main_window没有settings_panel属性")
+        
+        # 方式2: 通过parent获取settings_panel
+        elif hasattr(self, 'parent') and self.parent:
+            print("DEBUG: 尝试通过parent获取settings_panel")
+            if hasattr(self.parent, 'settings_panel') and self.parent.settings_panel:
+                settings_panel = self.parent.settings_panel
+                
+                try:
+                    # 更新水平位置滑块
+                    if hasattr(settings_panel, 'horizontal_position_slider') and settings_panel.horizontal_position_slider:
+                        settings_panel.horizontal_position_slider.setValue(h_percent)
+                        
+                    # 更新垂直位置滑块
+                    if hasattr(settings_panel, 'vertical_position_slider') and settings_panel.vertical_position_slider:
+                        settings_panel.vertical_position_slider.setValue(v_percent)
+                        
+                    print(f"DEBUG: 直接更新parent.settings_panel滑块值: h={h_percent}, v={v_percent}")
+                    settings_updated = True
+                except Exception as e:
+                    print(f"DEBUG: 更新parent.settings_panel滑块失败: {e}")
+                    
+                # 尝试使用预设位置方法
+                if hasattr(settings_panel, 'set_preset_position'):
+                    try:
+                        print(f"DEBUG: 调用parent.settings_panel.set_preset_position({h_percent}, {v_percent})")
+                        settings_panel.set_preset_position(h_percent, v_percent)
+                        settings_updated = True
+                    except Exception as e:
+                        print(f"DEBUG: 调用set_preset_position失败: {e}")
+            else:
+                print("DEBUG: parent没有settings_panel属性")
+        
+        # 步骤3: 立即刷新预览（确保水印位置更新并更新判定区域）
+        try:
+            print("DEBUG: 执行预览刷新以更新水印位置和判定区域")
+            self.update_watermark_preview()
+            
+            # 确保update_watermark_preview后有足够时间更新watermark_rect
+            # 检查是否成功更新了水印矩形区域
+            if hasattr(self, 'watermark_rect') and self.watermark_rect is not None:
+                print(f"DEBUG: 水印矩形区域已更新为: {self.watermark_rect}")
+            else:
+                print("DEBUG: 刷新预览后水印矩形区域仍为None，使用直接计算的区域")
+                
+                # 直接计算一个合理的水印区域作为临时方案
+                # 假设水印大小为预览窗口的1/3
+                temp_width = max(50, window_width // 3)
+                temp_height = max(30, window_height // 3)
+                
+                # 计算基于鼠标位置的水印区域
+                temp_x = mouse_x - temp_width // 2
+                temp_y = mouse_y - temp_height // 2
+                
+                # 确保不超出窗口边界
+                temp_x = max(0, min(temp_x, window_width - temp_width))
+                temp_y = max(0, min(temp_y, window_height - temp_height))
+                
+                # 直接设置临时水印矩形区域
+                self.watermark_rect = (temp_x, temp_y, temp_width, temp_height)
+                print(f"DEBUG: 已设置临时水印矩形区域: {self.watermark_rect}")
+            
+        except Exception as e:
+            print(f"DEBUG: 刷新预览失败: {e}")
+            traceback.print_exc()
+            
+            # 出错时，使用直接计算的临时水印区域
+            try:
+                temp_width = max(50, window_width // 3)
+                temp_height = max(30, window_height // 3)
+                temp_x = mouse_x - temp_width // 2
+                temp_y = mouse_y - temp_height // 2
+                temp_x = max(0, min(temp_x, window_width - temp_width))
+                temp_y = max(0, min(temp_y, window_height - temp_height))
+                self.watermark_rect = (temp_x, temp_y, temp_width, temp_height)
+                print(f"DEBUG: 出错时设置临时水印矩形区域: {self.watermark_rect}")
+            except:
+                pass
+        
+        print(f"DEBUG: 水印位置更新完成，设置更新状态: {settings_updated}")
+    
+    def on_mouse_move(self, event):
+        """处理鼠标移动事件"""
+        print(f"DEBUG: 鼠标移动事件触发，位置: ({event.pos().x()}, {event.pos().y()})")
+        
+        # 确保effect_preview存在
+        if not hasattr(self, 'effect_preview') or self.effect_preview is None:
+            print("DEBUG: effect_preview不存在，跳过事件处理")
+            return
+        
+        # 检查鼠标是否在水印区域内
+        is_over_watermark = self._is_point_in_watermark(event.pos())
+        self._is_mouse_over_watermark = is_over_watermark
+        print(f"DEBUG: 鼠标在水印区域内: {is_over_watermark}")
+        
+        # 检查拖拽状态
+        is_dragging = hasattr(self, 'is_dragging') and self.is_dragging
+        has_last_pos = hasattr(self, 'last_pos') and self.last_pos
+        print(f"DEBUG: is_dragging: {is_dragging}, has_last_pos: {has_last_pos}")
+        
+        if is_dragging and has_last_pos:
+            print("DEBUG: 正在拖拽中")
+            
+            # 使用辅助方法更新位置
+            try:
+                self._update_watermark_position(event.pos())
+                # 更新last_pos
+                self.last_pos = event.pos()
+                print(f"DEBUG: 更新last_pos到: ({event.pos().x()}, {event.pos().y()})")
+            except Exception as e:
+                print(f"DEBUG: 更新水印位置时出错: {e}")
+                traceback.print_exc()
+        else:
+            # 根据鼠标是否在水印区域来改变光标样式
+            if is_over_watermark:
+                self.effect_preview.setCursor(Qt.OpenHandCursor)
+                print("DEBUG: 鼠标在水印区域上，显示OpenHandCursor以提示可拖拽")
+            else:
+                self.effect_preview.setCursor(Qt.ArrowCursor)
+                print("DEBUG: 鼠标不在水印区域上，显示默认箭头光标")
+    
+    def on_mouse_release(self, event):
+        """处理鼠标释放事件"""
+        print(f"DEBUG: 鼠标释放事件触发，按钮: {event.button()}")
+        
+        if event.button() == Qt.LeftButton and hasattr(self, 'is_dragging') and self.is_dragging:
+            print("DEBUG: 结束拖拽")
+            self.is_dragging = False
+            self.last_pos = None
+            if hasattr(self, 'effect_preview'):
+                # 释放后根据鼠标位置设置光标
+                if self._is_point_in_watermark(event.pos()):
+                    self.effect_preview.setCursor(Qt.OpenHandCursor)
+                    print("DEBUG: 光标设置为OpenHandCursor")
+                else:
+                    self.effect_preview.setCursor(Qt.ArrowCursor)
+                    print("DEBUG: 光标设置为ArrowCursor")
+    
+    def on_mouse_double_click(self, event):
+        """处理鼠标双击事件，重置水印位置到中心"""
+        print(f"DEBUG: 鼠标双击事件触发，位置: ({event.pos().x()}, {event.pos().y()})")
+        
+        if hasattr(self, 'parent') and self.parent and hasattr(self.parent, 'settings_panel'):
+            settings_panel = self.parent.settings_panel
+            if hasattr(settings_panel, 'set_preset_position'):
+                print("DEBUG: 双击重置水印位置到中心(50, 50)")
+                settings_panel.set_preset_position(50, 50)
+    
     def _get_watermark_settings(self):
         """
         从设置面板获取所有水印设置
         现在使用已应用的设置，而不是直接从UI组件获取值
         """
+        print("DEBUG: 尝试获取水印设置")
         # 尝试从设置面板获取已应用的设置
         if hasattr(self, 'main_window') and hasattr(self.main_window, 'settings_panel'):
             try:
                 panel = self.main_window.settings_panel
                 # 使用已应用的设置
                 if hasattr(panel, 'get_applied_settings'):
-                    return panel.get_applied_settings()
+                    settings = panel.get_applied_settings()
+                    print(f"DEBUG: 成功获取已应用设置: {settings}")
+                    return settings
             except Exception as e:
-                print(f"获取已应用设置失败: {str(e)}")
+                print(f"DEBUG: 获取已应用设置失败: {str(e)}")
+                import traceback
+                traceback.print_exc()
         
         # 默认设置作为备用
         return {
@@ -389,9 +805,12 @@ class PreviewPanel(QWidget):
     def _apply_watermark(self, image, settings):
         """
         应用水印到图片上，使用与toolbar.py相同的逻辑
+        
+        Returns:
+            tuple: (watermarked_image, watermark_rect) - 水印图片和水印位置矩形
         """
         import traceback
-        print("=== 开始应用水印(预览) ===")
+        print("DEBUG: === 开始应用水印(预览) ===")
         
         # 尝试调用设置面板中可能存在的apply_watermark方法
         if hasattr(self, 'main_window') and hasattr(self.main_window, 'settings_panel'):
@@ -399,7 +818,12 @@ class PreviewPanel(QWidget):
             if hasattr(panel, 'apply_watermark'):
                 try:
                     print("尝试使用设置面板的apply_watermark方法")
-                    return panel.apply_watermark(image, settings)
+                    result = panel.apply_watermark(image, settings)
+                    # 兼容原有的单返回值和新的双返回值
+                    if isinstance(result, tuple) and len(result) == 2:
+                        return result
+                    else:
+                        return result, None  # 原方法只返回图片，位置信息为None
                 except UnicodeEncodeError as e:
                     print(f"设置面板的apply_watermark方法出现编码错误(UnicodeEncodeError): {e}")
                     print("检测到中文字符编码问题，直接使用本地面板的水印实现")
@@ -539,12 +963,13 @@ class PreviewPanel(QWidget):
                     print(f"加载默认字体失败: {type(e).__name__}: {e}")
                     font = None  # 允许font为None，让绘制函数处理
             
+            watermark_rect = None
             # 根据不同的水印样式应用
             try:
                 if style == "single":
                     # 单个水印
                     print("应用单个水印")
-                    self._apply_single_watermark(draw, watermarked.size, safe_text, font, color, opacity, 
+                    watermark_rect = self._apply_single_watermark(draw, watermarked.size, safe_text, font, color, opacity, 
                                                 settings.get('h_position', 0.5), settings.get('v_position', 0.5), rotation)
                 elif style == "tile":
                     # 平铺水印
@@ -556,7 +981,7 @@ class PreviewPanel(QWidget):
                     self._apply_diagonal_watermark(draw, watermarked.size, safe_text, font, color, opacity, spacing, rotation)
                 else:
                     print(f"未知水印样式: {style}，使用单个水印")
-                    self._apply_single_watermark(draw, watermarked.size, safe_text, font, color, opacity, 
+                    watermark_rect = self._apply_single_watermark(draw, watermarked.size, safe_text, font, color, opacity, 
                                                 settings.get('h_position', 0.5), settings.get('v_position', 0.5), rotation)
             except Exception as e:
                 print(f"应用水印样式失败: {type(e).__name__}: {e}")
@@ -569,20 +994,25 @@ class PreviewPanel(QWidget):
                     else:
                         draw.text((10, 10), safe_text, fill=color)
                     print("备用水印方案应用成功")
+                    # 备用水印位置在左上角
+                    watermark_rect = (10, 10, 100, 30)  # 估算的大小
                 except Exception as e2:
                     print(f"备用水印方案也失败: {type(e2).__name__}: {e2}")
             
             print("=== 水印应用完成(预览) ===")
-            return watermarked
+            return watermarked, watermark_rect
         except Exception as e:
             print(f"整个水印应用过程失败: {type(e).__name__}: {e}")
             traceback.print_exc()
-            # 如果整个过程失败，返回原始图像的副本
-            return image.copy()
+            # 如果整个过程失败，返回原始图像的副本和None位置
+            return image.copy(), None
     
     def _apply_single_watermark(self, draw, image_size, text, font, color, opacity, h_position, v_position, rotation):
         """
         应用单个水印
+        
+        Returns:
+            tuple: (x, y, width, height) - 水印位置和尺寸
         """
         from PIL import Image, ImageDraw, ImageFont
         import traceback
@@ -620,6 +1050,8 @@ class PreviewPanel(QWidget):
         x = max(0, int((image_size[0] - text_width) * h_position))
         y = max(0, int((image_size[1] - text_height) * v_position))
         print(f"计算水印位置: ({x}, {y})")
+        
+        final_x, final_y, final_width, final_height = x, y, text_width, text_height
         
         # 如果需要旋转
         if rotation != 0:
@@ -661,6 +1093,9 @@ class PreviewPanel(QWidget):
                 
                 # 粘贴旋转后的文本
                 temp_img.paste(rotated, (rot_x, rot_y), rotated)
+                
+                # 更新最终位置和尺寸为旋转后的
+                final_x, final_y, final_width, final_height = rot_x, rot_y, rotated.width, rotated.height
             except Exception as e:
                 print(f"旋转水印处理失败: {type(e).__name__}: {e}")
                 traceback.print_exc()
@@ -695,12 +1130,9 @@ class PreviewPanel(QWidget):
                 print("降级bitmap方法成功")
             except Exception as e2:
                 print(f"降级bitmap方法也失败: {type(e2).__name__}: {e2}")
-                # 最后尝试直接在原图上绘制文本作为备用
-                try:
-                    draw.text((x, y), safe_text, font=font, fill=color)
-                    print("备用方案：直接在原图绘制成功")
-                except Exception as e3:
-                    print(f"备用方案也失败: {type(e3).__name__}: {e3}")
+        
+        # 返回水印的位置和尺寸
+        return (final_x, final_y, final_width, final_height)
     
     def _apply_tile_watermark(self, draw, image_size, text, font, color, opacity, spacing, rotation):
         """
@@ -743,3 +1175,134 @@ class PreviewPanel(QWidget):
                 v_pos = min(max(start_y / image_size[1], 0), 1)
                 # 应用单个水印
                 self._apply_single_watermark(draw, image_size, text, font, color, opacity, h_pos, v_pos, adjusted_rotation)
+    
+    def _is_point_in_watermark(self, pos):
+        """
+        判断给定位置是否在水印区域内
+        
+        Args:
+            pos: QPoint对象，表示鼠标位置
+            
+        Returns:
+            bool: 如果在水印区域内返回True，否则返回False
+        """
+        # 检查watermark_rect是否存在且有效
+        if not hasattr(self, 'watermark_rect') or self.watermark_rect is None:
+            print("DEBUG: 水印矩形区域不存在，根据水印设置计算默认水印区域")
+            # 当水印矩形区域未设置时，使用水印设置计算一个更准确的默认水印区域
+            if hasattr(self, 'effect_preview') and self.effect_preview:
+                try:
+                    # 获取当前的水印设置
+                    settings = self._get_watermark_settings()
+                    h_position = settings.get('h_position', 0.5)
+                    v_position = settings.get('v_position', 0.5)
+                    text = settings.get('text', 'Watermark')
+                    base_font_size = settings.get('size', 30)
+                    rotation = settings.get('rotation', 0)
+                    
+                    # 计算预览窗口尺寸
+                    window_width = self.effect_preview.width()
+                    window_height = self.effect_preview.height()
+                    
+                    # 计算更准确的水印大小
+                    text_length = len(str(text))
+                    # 根据字体大小和文本长度估算宽度
+                    estimated_width = max(50, min(int(base_font_size * 0.6 * text_length), window_width // 2))
+                    # 高度通常是字体大小的约1.2倍
+                    estimated_height = max(30, min(int(base_font_size * 1.2), window_height // 2))
+                    
+                    # 如果有旋转，需要考虑旋转后的大小变化
+                    if rotation != 0:
+                        import math
+                        angle_rad = abs(math.radians(rotation))
+                        # 计算旋转后的最小包围矩形尺寸
+                        rotated_width = int(estimated_width * math.cos(angle_rad) + estimated_height * math.sin(angle_rad))
+                        rotated_height = int(estimated_width * math.sin(angle_rad) + estimated_height * math.cos(angle_rad))
+                        estimated_width = max(estimated_width, rotated_width)
+                        estimated_height = max(estimated_height, rotated_height)
+                    
+                    # 根据位置设置计算水印区域中心
+                    center_x = int(h_position * window_width)
+                    center_y = int(v_position * window_height)
+                    
+                    # 计算水印区域左上角坐标
+                    default_x = center_x - estimated_width // 2
+                    default_y = center_y - estimated_height // 2
+                    
+                    # 确保不超出窗口边界
+                    default_x = max(0, min(default_x, window_width - estimated_width))
+                    default_y = max(0, min(default_y, window_height - estimated_height))
+                    
+                    # 设置默认水印矩形区域大小
+                    default_width = estimated_width
+                    default_height = estimated_height
+                    
+                    print(f"DEBUG: 计算的默认水印矩形区域: ({default_x}, {default_y}, {default_width}, {default_height})")
+                except Exception as e:
+                    print(f"DEBUG: 计算默认水印矩形区域失败，使用降级方案: {e}")
+                    # 降级到简单计算
+                    window_width = self.effect_preview.width()
+                    window_height = self.effect_preview.height()
+                    # 根据水印大小设置动态调整判定区域大小
+                    try:
+                        settings = self._get_watermark_settings()
+                        base_size = settings.get('size', 30)
+                        # 大小与字体大小成正比，但有上下限
+                        default_width = max(50, min(int(base_size * 3), window_width // 2))
+                        default_height = max(30, min(int(base_size * 1.5), window_height // 2))
+                    except:
+                        # 最终降级到固定比例
+                        default_width = max(50, window_width // 3)
+                        default_height = max(30, window_height // 3)
+                    
+                    # 获取位置设置
+                    try:
+                        settings = self._get_watermark_settings()
+                        h_position = settings.get('h_position', 0.5)
+                        v_position = settings.get('v_position', 0.5)
+                        center_x = int(h_position * window_width)
+                        center_y = int(v_position * window_height)
+                        default_x = center_x - default_width // 2
+                        default_y = center_y - default_height // 2
+                    except:
+                        # 最终降级到中心位置
+                        default_x = (window_width - default_width) // 2
+                        default_y = (window_height - default_height) // 2
+                    
+                    # 确保不超出窗口边界
+                    default_x = max(0, min(default_x, window_width - default_width))
+                    default_y = max(0, min(default_y, window_height - default_height))
+                
+                # 检查鼠标是否在默认区域内
+                mouse_x, mouse_y = pos.x(), pos.y()
+                is_in_default = (default_x <= mouse_x <= default_x + default_width) and \
+                               (default_y <= mouse_y <= default_y + default_height)
+                print(f"DEBUG: 鼠标位置({mouse_x}, {mouse_y})是否在默认水印区域({default_x}, {default_y}, {default_width}, {default_height})内: {is_in_default}")
+                return is_in_default
+            return False
+        
+        try:
+            # 解包水印矩形区域
+            x, y, width, height = self.watermark_rect
+            mouse_x, mouse_y = pos.x(), pos.y()
+            
+            # 计算是否在矩形范围内
+            is_in_rect = (x <= mouse_x <= x + width) and (y <= mouse_y <= y + height)
+            print(f"DEBUG: 鼠标位置({mouse_x}, {mouse_y})是否在水印区域({x}, {y}, {width}, {height})内: {is_in_rect}")
+            return is_in_rect
+        except Exception as e:
+            print(f"DEBUG: 判断鼠标是否在水印区域内时出错: {e}")
+            traceback.print_exc()
+            # 出错时，使用与水印矩形不存在时相同的默认行为
+            if hasattr(self, 'effect_preview') and self.effect_preview:
+                window_width = self.effect_preview.width()
+                window_height = self.effect_preview.height()
+                default_width = max(50, window_width // 3)
+                default_height = max(30, window_height // 3)
+                default_x = (window_width - default_width) // 2
+                default_y = (window_height - default_height) // 2
+                
+                mouse_x, mouse_y = pos.x(), pos.y()
+                return (default_x <= mouse_x <= default_x + default_width) and \
+                       (default_y <= mouse_y <= default_y + default_height)
+            return False

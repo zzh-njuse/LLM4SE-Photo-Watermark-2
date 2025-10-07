@@ -14,8 +14,13 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("照片水印工具")
-        self.setMinimumSize(1200, 800)
+        self.main_splitter = None  # 保存主分割器引用
+        self.screen_size = None  # 保存屏幕大小
         self.init_ui()
+        # 设置窗口默认大小为屏幕大小的80%
+        self._set_default_size()
+        # 连接窗口大小变化信号
+        self.resizeEvent = self.on_resize
     
     def init_ui(self):
         """初始化用户界面"""
@@ -44,8 +49,11 @@ class MainWindow(QMainWindow):
         self.settings_panel = SettingsPanel()
         main_splitter.addWidget(self.settings_panel)
         
-        # 设置分割器初始大小 - 增加左侧图片列表的宽度
-        main_splitter.setSizes([250, 550, 400])
+        # 保存分割器引用
+        self.main_splitter = main_splitter
+        
+        # 初始化分割器大小
+        self.update_splitter_sizes()
         
         # 将分割器添加到主布局
         main_layout.addWidget(main_splitter, 1)  # 1表示拉伸因子
@@ -82,3 +90,54 @@ class MainWindow(QMainWindow):
         if hasattr(self.preview_panel, 'set_preview_image'):
             self.preview_panel.current_image_path = image_path
             self.preview_panel.set_preview_image(image_path)
+    
+    def _set_default_size(self):
+        """
+        设置窗口默认大小为屏幕大小的80%
+        """
+        # 获取屏幕大小
+        screen = self.screen()
+        self.screen_size = screen.availableSize()
+        
+        # 计算80%的屏幕大小
+        default_width = int(self.screen_size.width() * 0.8)
+        default_height = int(self.screen_size.height() * 0.8)
+        
+        # 设置最小和默认大小
+        self.setMinimumSize(default_width, default_height)
+        
+        # 设置窗口大小
+        self.resize(default_width, default_height)
+        
+        # 将窗口居中显示
+        self.move(
+            int((self.screen_size.width() - default_width) / 2),
+            int((self.screen_size.height() - default_height) / 2)
+        )
+    
+    def on_resize(self, event):
+        """
+        处理窗口大小变化事件，按比例调整面板大小
+        """
+        # 调用原始的resizeEvent
+        super().resizeEvent(event)
+        
+        # 更新分割器大小
+        self.update_splitter_sizes()
+    
+    def update_splitter_sizes(self):
+        """
+        根据窗口宽度按比例更新分割器大小
+        使用固定比例：左侧列表面板占25%，中央预览面板占50%，右侧设置面板占25%
+        """
+        if self.main_splitter:
+            # 获取可用宽度
+            available_width = self.width() - 20  # 减去一些边距
+            
+            # 按比例计算各面板宽度
+            left_width = int(available_width * 0.25)  # 左侧面板占25%
+            center_width = int(available_width * 0.50)  # 中央面板占50%
+            right_width = int(available_width * 0.25)  # 右侧面板占25%
+            
+            # 设置分割器大小
+            self.main_splitter.setSizes([left_width, center_width, right_width])
