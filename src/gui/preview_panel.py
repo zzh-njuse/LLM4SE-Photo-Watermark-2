@@ -131,7 +131,7 @@ class PreviewPanel(QWidget):
         # 设置预览标签的固定大小 - 放大预览窗口
         self.original_preview = QLabel("上传后显示原图")
         self.original_preview.setAlignment(Qt.AlignCenter)
-        self.original_preview.setFixedSize(400, 300)  # 放大预览窗口大小
+        self.original_preview.setFixedSize(550, 450)  # 放大预览窗口大小
         self.original_preview.setStyleSheet("background-color: #f5f5f5; border-radius: 4px; border: 1px solid #dddddd;")
         self.original_preview.setScaledContents(True)  # 允许图片自动缩放填充区域
         
@@ -150,7 +150,7 @@ class PreviewPanel(QWidget):
         # 设置预览标签的固定大小 - 放大预览窗口
         self.effect_preview = QLabel("此处实时预览效果")
         self.effect_preview.setAlignment(Qt.AlignCenter)
-        self.effect_preview.setFixedSize(400, 300)  # 放大预览窗口大小
+        self.effect_preview.setFixedSize(550, 450)  # 放大预览窗口大小
         self.effect_preview.setStyleSheet("background-color: #f5f5f5; border-radius: 4px; border: 1px solid #dddddd;")
         self.effect_preview.setScaledContents(True)  # 允许图片自动缩放填充区域
         
@@ -811,6 +811,28 @@ class PreviewPanel(QWidget):
         """
         import traceback
         print("DEBUG: === 开始应用水印(预览) ===")
+        print(f"设置内容: {settings}")
+        
+        # 直接测试颜色转换逻辑
+        color_str = settings.get('color', '#FFFFFF')
+        opacity = int(settings.get('opacity', 0.5) * 255)
+        print(f"\n===== 直接颜色测试开始 =====")
+        print(f"输入颜色: {color_str}, 不透明度: {opacity}")
+        
+        try:
+            # 移除#号（如果有）
+            color_str = str(color_str).lstrip('#')
+            print(f"处理后颜色字符串: {color_str}")
+            # 转换为RGB
+            r = int(color_str[0:2], 16)
+            g = int(color_str[2:4], 16)
+            b = int(color_str[4:6], 16)
+            print(f"RGB值: R={r}, G={g}, B={b}")
+            # 创建RGBA颜色
+            test_color = (r, g, b, opacity)
+            print(f"测试颜色转换结果: {test_color}")
+        except Exception as e:
+            print(f"测试颜色转换失败: {type(e).__name__}: {e}")
         
         # 尝试调用设置面板中可能存在的apply_watermark方法
         if hasattr(self, 'main_window') and hasattr(self.main_window, 'settings_panel'):
@@ -878,82 +900,128 @@ class PreviewPanel(QWidget):
                 print(f"计算字体缩放比例失败: {e}，使用原始大小")
                 font_size = base_font_size
             
+            # 获取所有文本效果相关的设置
             opacity = int(settings.get('opacity', 0.5) * 255)  # 转换为0-255范围
             rotation = settings.get('rotation', 0)
             color_str = settings.get('color', '#FFFFFF')
             style = settings.get('style', 'single')
             spacing = settings.get('spacing', 20)
             
-            print(f"水印设置: 字体大小={font_size}, 不透明度={opacity}, 旋转={rotation}, 样式={style}")
+            # 新增：获取字体样式和效果设置
+            bold = settings.get('bold', False)
+            italic = settings.get('italic', False)
+            shadow = settings.get('shadow', False)
+            stroke = settings.get('stroke', False)
+            stroke_width = settings.get('stroke_width', 2)
+            stroke_color_str = settings.get('stroke_color', '#000000')
             
-            # 将十六进制颜色转换为RGBA元组，添加错误处理
+            print(f"水印设置: 字体大小={font_size}, 不透明度={opacity}, 旋转={rotation}, 样式={style}")
+            print(f"文本效果设置: 粗体={bold}, 斜体={italic}, 阴影={shadow}, 描边={stroke}, 描边宽度={stroke_width}")
+            
+            # 将十六进制颜色转换为RGBA元组，添加更详细的错误处理和调试
+            print("===== 颜色处理开始 =====")
+            print(f"输入颜色值: {color_str}, 不透明度: {opacity}")
             try:
                 # 移除#号（如果有）
                 color_str = str(color_str).lstrip('#')
+                print(f"处理后的颜色字符串: {color_str}")
+                # 确保颜色字符串长度正确
+                if len(color_str) != 6:
+                    raise ValueError(f"颜色字符串长度不正确: {color_str}")
                 # 转换为RGB
                 r = int(color_str[0:2], 16)
                 g = int(color_str[2:4], 16)
                 b = int(color_str[4:6], 16)
+                print(f"RGB值: R={r}, G={g}, B={b}")
+                # 确保值在有效范围内
+                if not (0 <= r <= 255 and 0 <= g <= 255 and 0 <= b <= 255):
+                    raise ValueError(f"颜色值超出范围: R={r}, G={g}, B={b}")
                 # 创建RGBA颜色
                 color = (r, g, b, opacity)
-                print(f"颜色转换成功: {color}")
+                print(f"===== 颜色转换成功: {color} =====")
             except Exception as e:
-                print(f"颜色转换失败: {type(e).__name__}: {e}")
+                print(f"===== 颜色转换失败: {type(e).__name__}: {e} =====")
                 # 默认使用白色半透明
                 color = (255, 255, 255, 128)
                 print(f"使用默认颜色: {color}")
             
+            # 解析描边颜色
+            try:
+                stroke_color_str = str(stroke_color_str).lstrip('#')
+                # 确保颜色字符串长度正确
+                if len(stroke_color_str) != 6:
+                    raise ValueError(f"描边颜色字符串长度不正确: {stroke_color_str}")
+                sr = int(stroke_color_str[0:2], 16)
+                sg = int(stroke_color_str[2:4], 16)
+                sb = int(stroke_color_str[4:6], 16)
+                # 确保值在有效范围内
+                if not (0 <= sr <= 255 and 0 <= sg <= 255 and 0 <= sb <= 255):
+                    raise ValueError(f"描边颜色值超出范围: R={sr}, G={sg}, B={sb}")
+                stroke_color = (sr, sg, sb, 255)  # 描边通常使用完全不透明
+                print(f"描边颜色转换成功: {stroke_color}")
+            except Exception as e:
+                print(f"描边颜色转换错误: {type(e).__name__}: {e}")
+                stroke_color = (0, 0, 0, 255)  # 默认黑色描边
+            
             # 尝试加载字体，如果失败使用默认字体
             font = None
-            # 尝试多种字体加载方式，确保中文能正确显示
-            try:
-                # 尝试直接使用系统字体
-                font_names = [settings.get('font', 'Arial'), 'SimHei', 'Microsoft YaHei', 'Arial']
-                font_paths = ['C:/Windows/Fonts/simhei.ttf', 'C:/Windows/Fonts/msyh.ttf']  # Windows常见中文字体路径
-                
-                # 先尝试字体路径
-                for font_path in font_paths:
-                    try:
-                        if os.path.exists(font_path):
-                            font = ImageFont.truetype(font_path, font_size)
-                            print(f"成功加载字体文件: {font_path}")
-                            break
-                    except Exception as e:
-                        print(f"加载字体文件失败 {font_path}: {type(e).__name__}: {e}")
-                
-                # 如果没有找到字体文件，尝试字体名称
-                if font is None:
-                    for font_name in font_names:
-                        try:
-                            # 尝试直接加载字体名称
-                            font = ImageFont.truetype(font_name, font_size)
-                            print(f"成功加载字体名称: {font_name}")
-                            # 测试是否能正确渲染文本
-                            try:
-                                temp_img = Image.new('RGBA', (100, 100), (255, 255, 255, 0))
-                                temp_draw = ImageDraw.Draw(temp_img)
-                                test_char = safe_text[:1] if safe_text else 'A'
-                                temp_draw.text((0, 0), test_char, font=font, fill=color)
-                                print(f"字体渲染测试成功")
-                                break
-                            except Exception as render_e:
-                                print(f"字体渲染测试失败: {type(render_e).__name__}: {render_e}")
-                                font = None
-                                continue
-                        except Exception as e:
-                            print(f"加载字体名称失败 {font_name}: {type(e).__name__}: {e}")
-                            # 尝试添加.ttf后缀
-                            try:
-                                ttf_name = f"{font_name}.ttf"
-                                font = ImageFont.truetype(ttf_name, font_size)
-                                print(f"成功加载字体文件: {ttf_name}")
-                                break
-                            except Exception as e2:
-                                print(f"加载ttf字体失败 {ttf_name}: {type(e2).__name__}: {e2}")
-            except Exception as e:
-                print(f"字体加载过程异常: {type(e).__name__}: {e}")
-                traceback.print_exc()
+            font_options = []
             
+            # 根据bold和italic属性构建字体选项列表
+            if bold and italic:
+                # 粗斜体
+                font_options = [f"{settings.get('font', 'Arial')}:bold:italic", f"{settings.get('font', 'Arial')}-BoldItalic"]
+            elif bold:
+                # 粗体
+                font_options = [f"{settings.get('font', 'Arial')}:bold", f"{settings.get('font', 'Arial')}-Bold"]
+            elif italic:
+                # 斜体
+                font_options = [f"{settings.get('font', 'Arial')}:italic", f"{settings.get('font', 'Arial')}-Italic"]
+            
+            # 添加基本字体作为后备选项
+            font_names = font_options + [settings.get('font', 'Arial'), 'SimHei', 'Microsoft YaHei', 'Arial']
+            font_paths = ['C:/Windows/Fonts/simhei.ttf', 'C:/Windows/Fonts/msyh.ttf']  # Windows常见中文字体路径
+            
+            # 先尝试字体路径
+            for font_path in font_paths:
+                try:
+                    if os.path.exists(font_path):
+                        font = ImageFont.truetype(font_path, font_size)
+                        print(f"成功加载字体文件: {font_path}")
+                        break
+                except Exception as e:
+                    print(f"加载字体文件失败 {font_path}: {type(e).__name__}: {e}")
+            
+            # 如果没有找到字体文件，尝试字体名称
+            if font is None:
+                for font_name in font_names:
+                    try:
+                        print(f"尝试加载字体: {font_name}")
+                        # 尝试直接加载字体名称
+                        font = ImageFont.truetype(font_name, font_size)
+                        print(f"成功加载字体名称: {font_name}")
+                        # 测试是否能正确渲染文本
+                        try:
+                            temp_img = Image.new('RGBA', (100, 100), (255, 255, 255, 0))
+                            temp_draw = ImageDraw.Draw(temp_img)
+                            test_char = safe_text[:1] if safe_text else 'A'
+                            temp_draw.text((0, 0), test_char, font=font, fill=color)
+                            print(f"字体渲染测试成功")
+                            break
+                        except Exception as render_e:
+                            print(f"字体渲染测试失败: {type(render_e).__name__}: {render_e}")
+                            font = None
+                            continue
+                    except Exception as e:
+                        print(f"加载字体名称失败 {font_name}: {type(e).__name__}: {e}")
+                        # 尝试添加.ttf后缀
+                        try:
+                            ttf_name = f"{font_name}.ttf"
+                            font = ImageFont.truetype(ttf_name, font_size)
+                            print(f"成功加载字体文件: {ttf_name}")
+                            break
+                        except Exception as e2:
+                            print(f"加载ttf字体失败 {ttf_name}: {type(e2).__name__}: {e2}")
             # 如果所有字体都加载失败，使用默认字体
             if font is None:
                 try:
@@ -970,19 +1038,23 @@ class PreviewPanel(QWidget):
                     # 单个水印
                     print("应用单个水印")
                     watermark_rect = self._apply_single_watermark(draw, watermarked.size, safe_text, font, color, opacity, 
-                                                settings.get('h_position', 0.5), settings.get('v_position', 0.5), rotation)
+                                                settings.get('h_position', 0.5), settings.get('v_position', 0.5), rotation,
+                                                shadow=shadow, stroke=stroke, stroke_width=stroke_width, stroke_color=stroke_color)
                 elif style == "tile":
                     # 平铺水印
                     print("应用平铺水印")
-                    self._apply_tile_watermark(draw, watermarked.size, safe_text, font, color, opacity, spacing, rotation)
+                    self._apply_tile_watermark(draw, watermarked.size, safe_text, font, color, opacity, spacing, rotation,
+                                             shadow=shadow, stroke=stroke, stroke_width=stroke_width, stroke_color=stroke_color)
                 elif style == "diagonal":
                     # 对角线水印
                     print("应用对角线水印")
-                    self._apply_diagonal_watermark(draw, watermarked.size, safe_text, font, color, opacity, spacing, rotation)
+                    self._apply_diagonal_watermark(draw, watermarked.size, safe_text, font, color, opacity, spacing, rotation,
+                                                 shadow=shadow, stroke=stroke, stroke_width=stroke_width, stroke_color=stroke_color)
                 else:
                     print(f"未知水印样式: {style}，使用单个水印")
                     watermark_rect = self._apply_single_watermark(draw, watermarked.size, safe_text, font, color, opacity, 
-                                                settings.get('h_position', 0.5), settings.get('v_position', 0.5), rotation)
+                                                settings.get('h_position', 0.5), settings.get('v_position', 0.5), rotation,
+                                                shadow=shadow, stroke=stroke, stroke_width=stroke_width, stroke_color=stroke_color)
             except Exception as e:
                 print(f"应用水印样式失败: {type(e).__name__}: {e}")
                 traceback.print_exc()
@@ -1007,7 +1079,69 @@ class PreviewPanel(QWidget):
             # 如果整个过程失败，返回原始图像的副本和None位置
             return image.copy(), None
     
-    def _apply_single_watermark(self, draw, image_size, text, font, color, opacity, h_position, v_position, rotation):
+    def _draw_text_with_effects(self, draw, position, text, font, fill, shadow=False, stroke=False, stroke_width=2, stroke_fill=(0,0,0,255)):
+        """
+        绘制带有效果的文本
+        
+        Args:
+            draw: ImageDraw对象
+            position: 文本位置 (x, y)
+            text: 要绘制的文本
+            font: ImageFont对象
+            fill: 文本颜色 (RGBA元组)
+            shadow: 是否添加阴影
+            stroke: 是否添加描边
+            stroke_width: 描边宽度
+            stroke_fill: 描边颜色 (RGBA元组)
+        """
+        x, y = position
+        
+        print("===== 文本绘制开始 =====")
+        print(f"绘制文本: 位置={position}, 文本={repr(text)}, 颜色={fill}, 阴影={shadow}, 描边={stroke}, 描边颜色={stroke_fill}")
+        
+        # 验证颜色参数格式
+        if not isinstance(fill, (tuple, list)) or len(fill) != 4:
+            print(f"警告: 颜色格式不正确: {fill}，使用默认颜色")
+            fill = (255, 255, 255, 255)
+        
+        if not isinstance(stroke_fill, (tuple, list)) or len(stroke_fill) != 4:
+            print(f"警告: 描边颜色格式不正确: {stroke_fill}，使用默认描边颜色")
+            stroke_fill = (0, 0, 0, 255)
+        
+        # 绘制阴影
+        if shadow:
+            shadow_color = (0, 0, 0, int(fill[3] * 0.5))  # 半透明黑色阴影
+            print(f"绘制阴影: 颜色={shadow_color}, 偏移=(+2,+2)")
+            # 绘制阴影（右下方偏移）
+            draw.text((x + 2, y + 2), text, font=font, fill=shadow_color)
+        
+        # 绘制描边 - 使用更有效的方法
+        if stroke:
+            print(f"绘制描边: 宽度={stroke_width}, 颜色={stroke_fill}")
+            # 对于较新版本的PIL，可以使用stroke_width参数
+            try:
+                # 尝试使用PIL的描边功能（如果可用）
+                draw.text((x, y), text, font=font, fill=fill, stroke_width=stroke_width, stroke_fill=stroke_fill)
+                print("使用PIL内置描边功能，同时绘制了文本和描边")
+                return  # 已经绘制了文本和描边，直接返回
+            except TypeError:
+                # 如果stroke_width参数不可用，使用传统方法
+                print("使用传统描边方法")
+                # 简化的描边实现，只绘制必要的像素
+                for offset in range(1, stroke_width + 1):
+                    # 四个主要方向
+                    draw.text((x - offset, y), text, font=font, fill=stroke_fill)
+                    draw.text((x + offset, y), text, font=font, fill=stroke_fill)
+                    draw.text((x, y - offset), text, font=font, fill=stroke_fill)
+                    draw.text((x, y + offset), text, font=font, fill=stroke_fill)
+        
+        # 绘制主文本 - 确保直接使用传入的颜色
+        print(f"绘制主文本: 颜色={fill}")
+        # 为了确保颜色正确应用，我们直接使用传入的颜色值，不做任何修改
+        draw.text((x, y), text, font=font, fill=fill)
+        print(f"主文本绘制完成，颜色={fill}已应用")
+        
+    def _apply_single_watermark(self, draw, image_size, text, font, color, opacity, h_position, v_position, rotation, shadow=False, stroke=False, stroke_width=2, stroke_color=(0,0,0,255)):
         """
         应用单个水印
         
@@ -1024,6 +1158,7 @@ class PreviewPanel(QWidget):
         # 确保文本是安全的字符串
         safe_text = str(text) if text else ''
         print(f"应用水印文本: {repr(safe_text)}, 位置: ({h_position}, {v_position}), 旋转: {rotation}")
+        print(f"应用文本效果: 阴影={shadow}, 描边={stroke}, 描边宽度={stroke_width}")
         
         # 获取文本尺寸
         text_width, text_height = 100, 30  # 默认大小
@@ -1067,9 +1202,11 @@ class PreviewPanel(QWidget):
                 center_y = (text_img.height - text_height) // 2
                 print(f"绘制旋转文本到临时图像中心: ({center_x}, {center_y})")
                 
-                # 安全地绘制文本
+                # 使用_draw_text_with_effects方法绘制带效果的文本
                 try:
-                    text_draw.text((center_x, center_y), safe_text, font=font, fill=color)
+                    self._draw_text_with_effects(text_draw, (center_x, center_y), safe_text, font, color, 
+                                               shadow=shadow, stroke=stroke, stroke_width=stroke_width, 
+                                               stroke_fill=stroke_color)
                 except Exception as e:
                     print(f"绘制旋转文本失败: {type(e).__name__}: {e}")
                     # 降级方案：尝试不带字体绘制
@@ -1101,15 +1238,20 @@ class PreviewPanel(QWidget):
                 traceback.print_exc()
                 # 降级到不旋转直接绘制
                 try:
-                    temp_draw.text((x, y), safe_text, font=font, fill=color)
+                    print(f"降级到不旋转绘制，应用文本效果")
+                    self._draw_text_with_effects(temp_draw, (x, y), safe_text, font, color, 
+                                               shadow=shadow, stroke=stroke, stroke_width=stroke_width, 
+                                               stroke_fill=stroke_color)
                     print("降级到不旋转绘制成功")
                 except Exception as e2:
                     print(f"降级绘制失败: {type(e2).__name__}: {e2}")
         else:
-            # 直接绘制文本
+            # 直接绘制文本，使用_draw_text_with_effects方法
             try:
-                print(f"直接绘制文本到位置: ({x}, {y})")
-                temp_draw.text((x, y), safe_text, font=font, fill=color)
+                print(f"直接绘制文本到位置: ({x}, {y})，应用文本效果")
+                self._draw_text_with_effects(temp_draw, (x, y), safe_text, font, color, 
+                                           shadow=shadow, stroke=stroke, stroke_width=stroke_width, 
+                                           stroke_fill=stroke_color)
             except Exception as e:
                 print(f"直接绘制文本失败: {type(e).__name__}: {e}")
                 # 降级方案：尝试不带字体绘制
@@ -1134,7 +1276,8 @@ class PreviewPanel(QWidget):
         # 返回水印的位置和尺寸
         return (final_x, final_y, final_width, final_height)
     
-    def _apply_tile_watermark(self, draw, image_size, text, font, color, opacity, spacing, rotation):
+    def _apply_tile_watermark(self, draw, image_size, text, font, color, opacity, spacing, rotation, 
+                             shadow=False, stroke=False, stroke_width=2, stroke_color=(0,0,0,255)):
         """
         应用平铺水印
         """
@@ -1147,10 +1290,12 @@ class PreviewPanel(QWidget):
                 # 计算相对位置
                 h_pos = x / image_size[0]
                 v_pos = y / image_size[1]
-                # 应用单个水印
-                self._apply_single_watermark(draw, image_size, text, font, color, opacity, h_pos, v_pos, rotation)
+                # 应用单个水印，传递文本效果参数
+                self._apply_single_watermark(draw, image_size, text, font, color, opacity, h_pos, v_pos, rotation,
+                                          shadow=shadow, stroke=stroke, stroke_width=stroke_width, stroke_color=stroke_color)
     
-    def _apply_diagonal_watermark(self, draw, image_size, text, font, color, opacity, spacing, rotation):
+    def _apply_diagonal_watermark(self, draw, image_size, text, font, color, opacity, spacing, rotation,
+                                 shadow=False, stroke=False, stroke_width=2, stroke_color=(0,0,0,255)):
         """
         应用对角线水印
         """
@@ -1173,8 +1318,9 @@ class PreviewPanel(QWidget):
             if start_x < image_size[0] and start_y < image_size[1]:
                 h_pos = min(max(start_x / image_size[0], 0), 1)
                 v_pos = min(max(start_y / image_size[1], 0), 1)
-                # 应用单个水印
-                self._apply_single_watermark(draw, image_size, text, font, color, opacity, h_pos, v_pos, adjusted_rotation)
+                # 应用单个水印，传递文本效果参数
+                self._apply_single_watermark(draw, image_size, text, font, color, opacity, h_pos, v_pos, adjusted_rotation,
+                                          shadow=shadow, stroke=stroke, stroke_width=stroke_width, stroke_color=stroke_color)
     
     def _is_point_in_watermark(self, pos):
         """
