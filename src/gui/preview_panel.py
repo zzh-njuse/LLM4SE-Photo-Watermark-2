@@ -9,7 +9,7 @@ import os
 from io import BytesIO
 import traceback
 
-print("DEBUG: PreviewPanel模块已导入")
+
 
 class PreviewPanel(QWidget):
     """
@@ -35,7 +35,7 @@ class PreviewPanel(QWidget):
         # 新增属性：跟踪鼠标是否在水印区域上方
         self._is_mouse_over_watermark = False
         
-        print("DEBUG: PreviewPanel初始化，设置基本属性，水印矩形区域初始化为None")
+
         
         self.init_ui()
         
@@ -165,14 +165,14 @@ class PreviewPanel(QWidget):
         layout.addWidget(preview_container, 6)  # 使用6作为拉伸因子
         
         # 连接鼠标事件
-        print("DEBUG: 连接鼠标事件到效果预览窗口")
+
         self.effect_preview.mousePressEvent = self.on_mouse_press
         self.effect_preview.mouseMoveEvent = self.on_mouse_move
         self.effect_preview.mouseReleaseEvent = self.on_mouse_release
         self.effect_preview.mouseDoubleClickEvent = self.on_mouse_double_click
         # 启用鼠标追踪，确保不按下鼠标也能接收移动事件
         self.effect_preview.setMouseTracking(True)
-        print("DEBUG: 已启用鼠标追踪")
+
         
 
     
@@ -279,14 +279,14 @@ class PreviewPanel(QWidget):
         """
         更新预览（例如在应用水印后）
         """
-        print("DEBUG: 开始更新预览，强制更新: %s" % force_update)
+
         # 确保effect_preview存在
         if not hasattr(self, 'effect_preview') or self.effect_preview is None:
-            print("DEBUG: effect_preview不存在，跳过更新")
+
             return
         
         if self.current_image_path:
-            print("DEBUG: 当前图片路径: %s" % self.current_image_path)
+    
             self.set_preview_image(self.current_image_path)
             self.update_watermark_preview()
             
@@ -385,7 +385,7 @@ class PreviewPanel(QWidget):
                     else:
                         # 当没有水印矩形时，根据设置的位置参数和水印属性计算更准确的水印判定区域
                         try:
-                            print("DEBUG: 未获取到水印矩形区域，根据位置设置和水印属性计算临时区域")
+                
                             
                             # 获取当前的水印设置
                             settings = self._get_watermark_settings()
@@ -465,7 +465,7 @@ class PreviewPanel(QWidget):
             except Exception as e:
                 print(f"DEBUG: 图像转换为QPixmap失败: {str(e)}")
                 self.watermark_rect = None
-                print("DEBUG: 水印矩形区域已重置为None")
+        
                 # 降级方案：如果转换失败，直接显示调试图片
                 try:
                     from PyQt5.QtGui import QPixmap, QImage
@@ -491,7 +491,7 @@ class PreviewPanel(QWidget):
         except Exception as e:
             print(f"DEBUG: 更新水印预览时出错: {str(e)}")
             self.watermark_rect = None
-            print("DEBUG: 水印矩形区域已重置为None")
+    
             # 使用英文错误信息避免编码问题
             if hasattr(self, 'effect_preview'):
                 self.effect_preview.setText("Watermark preview error")
@@ -518,19 +518,19 @@ class PreviewPanel(QWidget):
         
         # 确保effect_preview存在
         if not hasattr(self, 'effect_preview') or self.effect_preview is None:
-            print("DEBUG: effect_preview不存在，跳过事件处理")
+
             return
         
         # 只有左键点击并且在水印区域内才开始拖拽
         if event.button() == Qt.LeftButton and self._is_point_in_watermark(event.pos()):
-            print("DEBUG: 左键点击水印区域，开始拖拽")
+            
             # 设置拖拽状态
             self.is_dragging = True
             self.last_pos = event.pos()
             
             # 更改光标为拖拽状态
             self.effect_preview.setCursor(Qt.ClosedHandCursor)
-            print("DEBUG: 光标已更改为ClosedHandCursor")
+            
             
             # 立即更新一次位置
             try:
@@ -541,9 +541,11 @@ class PreviewPanel(QWidget):
                 traceback.print_exc()
         else:
             if event.button() == Qt.LeftButton:
-                print("DEBUG: 左键点击但不在水印区域，忽略")
+                pass
+    
             else:
-                print("DEBUG: 不是左键点击，忽略")
+                pass
+        
     
     def _update_watermark_position(self, pos):
         """更新水印位置的辅助方法，实现实时拖拽预览并更新判定区域"""
@@ -551,7 +553,7 @@ class PreviewPanel(QWidget):
         
         # 首先检查effect_preview是否存在且有效
         if not hasattr(self, 'effect_preview') or self.effect_preview is None:
-            print("DEBUG: effect_preview不存在，无法更新位置")
+    
             return
         
         # 获取预览窗口尺寸
@@ -562,7 +564,7 @@ class PreviewPanel(QWidget):
         print(f"DEBUG: 预览窗口尺寸: ({window_width}, {window_height})")
         
         if window_width <= 0 or window_height <= 0:
-            print("DEBUG: 预览窗口尺寸无效")
+    
             return
         
         # 转换为0-1的坐标比例（更适合直接用于图像绘制）
@@ -591,7 +593,7 @@ class PreviewPanel(QWidget):
         # 方式1: 通过main_window获取settings_panel
         settings_updated = False
         if hasattr(self, 'main_window') and self.main_window:
-            print("DEBUG: 尝试通过main_window获取settings_panel")
+    
             if hasattr(self.main_window, 'settings_panel') and self.main_window.settings_panel:
                 settings_panel = self.main_window.settings_panel
                 
@@ -618,11 +620,11 @@ class PreviewPanel(QWidget):
                     except Exception as e:
                         print(f"DEBUG: 调用set_preset_position失败: {e}")
             else:
-                print("DEBUG: main_window没有settings_panel属性")
+                pass
         
         # 方式2: 通过parent获取settings_panel
         elif hasattr(self, 'parent') and self.parent:
-            print("DEBUG: 尝试通过parent获取settings_panel")
+    
             if hasattr(self.parent, 'settings_panel') and self.parent.settings_panel:
                 settings_panel = self.parent.settings_panel
                 
@@ -649,11 +651,11 @@ class PreviewPanel(QWidget):
                     except Exception as e:
                         print(f"DEBUG: 调用set_preset_position失败: {e}")
             else:
-                print("DEBUG: parent没有settings_panel属性")
+                pass
         
         # 步骤3: 立即刷新预览（确保水印位置更新并更新判定区域）
         try:
-            print("DEBUG: 执行预览刷新以更新水印位置和判定区域")
+    
             self.update_watermark_preview()
             
             # 确保update_watermark_preview后有足够时间更新watermark_rect
@@ -661,7 +663,7 @@ class PreviewPanel(QWidget):
             if hasattr(self, 'watermark_rect') and self.watermark_rect is not None:
                 print(f"DEBUG: 水印矩形区域已更新为: {self.watermark_rect}")
             else:
-                print("DEBUG: 刷新预览后水印矩形区域仍为None，使用直接计算的区域")
+        
                 
                 # 直接计算一个合理的水印区域作为临时方案
                 # 假设水印大小为预览窗口的1/3
@@ -705,7 +707,7 @@ class PreviewPanel(QWidget):
         
         # 确保effect_preview存在
         if not hasattr(self, 'effect_preview') or self.effect_preview is None:
-            print("DEBUG: effect_preview不存在，跳过事件处理")
+
             return
         
         # 检查鼠标是否在水印区域内
@@ -719,7 +721,7 @@ class PreviewPanel(QWidget):
         print(f"DEBUG: is_dragging: {is_dragging}, has_last_pos: {has_last_pos}")
         
         if is_dragging and has_last_pos:
-            print("DEBUG: 正在拖拽中")
+
             
             # 使用辅助方法更新位置
             try:
@@ -734,27 +736,27 @@ class PreviewPanel(QWidget):
             # 根据鼠标是否在水印区域来改变光标样式
             if is_over_watermark:
                 self.effect_preview.setCursor(Qt.OpenHandCursor)
-                print("DEBUG: 鼠标在水印区域上，显示OpenHandCursor以提示可拖拽")
+
             else:
                 self.effect_preview.setCursor(Qt.ArrowCursor)
-                print("DEBUG: 鼠标不在水印区域上，显示默认箭头光标")
+
     
     def on_mouse_release(self, event):
         """处理鼠标释放事件"""
         print(f"DEBUG: 鼠标释放事件触发，按钮: {event.button()}")
         
         if event.button() == Qt.LeftButton and hasattr(self, 'is_dragging') and self.is_dragging:
-            print("DEBUG: 结束拖拽")
+            
             self.is_dragging = False
             self.last_pos = None
             if hasattr(self, 'effect_preview'):
                 # 释放后根据鼠标位置设置光标
                 if self._is_point_in_watermark(event.pos()):
                     self.effect_preview.setCursor(Qt.OpenHandCursor)
-                    print("DEBUG: 光标设置为OpenHandCursor")
+            
                 else:
                     self.effect_preview.setCursor(Qt.ArrowCursor)
-                    print("DEBUG: 光标设置为ArrowCursor")
+            
     
     def on_mouse_double_click(self, event):
         """处理鼠标双击事件，重置水印位置到中心"""
@@ -763,7 +765,7 @@ class PreviewPanel(QWidget):
         if hasattr(self, 'parent') and self.parent and hasattr(self.parent, 'settings_panel'):
             settings_panel = self.parent.settings_panel
             if hasattr(settings_panel, 'set_preset_position'):
-                print("DEBUG: 双击重置水印位置到中心(50, 50)")
+    
                 settings_panel.set_preset_position(50, 50)
     
     def _get_watermark_settings(self):
@@ -771,7 +773,7 @@ class PreviewPanel(QWidget):
         从设置面板获取所有水印设置
         现在使用已应用的设置，而不是直接从UI组件获取值
         """
-        print("DEBUG: 尝试获取水印设置")
+
         # 尝试从设置面板获取已应用的设置
         if hasattr(self, 'main_window') and hasattr(self.main_window, 'settings_panel'):
             try:
@@ -810,7 +812,7 @@ class PreviewPanel(QWidget):
             tuple: (watermarked_image, watermark_rect) - 水印图片和水印位置矩形
         """
         import traceback
-        print("DEBUG: === 开始应用水印(预览) ===")
+
         print(f"设置内容: {settings}")
         
         # 直接测试颜色转换逻辑
@@ -979,8 +981,8 @@ class PreviewPanel(QWidget):
                 font_options = [f"{settings.get('font', 'Arial')}:italic", f"{settings.get('font', 'Arial')}-Italic"]
             
             # 添加基本字体作为后备选项
-            font_names = font_options + [settings.get('font', 'Arial'), 'SimHei', 'Microsoft YaHei', 'Arial']
-            font_paths = ['C:/Windows/Fonts/simhei.ttf', 'C:/Windows/Fonts/msyh.ttf']  # Windows常见中文字体路径
+            font_names = font_options + [settings.get('font', '微软雅黑'), 'Microsoft YaHei', 'SimHei', 'Arial']
+            font_paths = ['C:/Windows/Fonts/msyh.ttf', 'C:/Windows/Fonts/simhei.ttf']  # Windows常见中文字体路径，优先微软雅黑
             
             # 先尝试字体路径
             for font_path in font_paths:
@@ -1040,18 +1042,8 @@ class PreviewPanel(QWidget):
                     watermark_rect = self._apply_single_watermark(draw, watermarked.size, safe_text, font, color, opacity, 
                                                 settings.get('h_position', 0.5), settings.get('v_position', 0.5), rotation,
                                                 shadow=shadow, stroke=stroke, stroke_width=stroke_width, stroke_color=stroke_color)
-                elif style == "tile":
-                    # 平铺水印
-                    print("应用平铺水印")
-                    self._apply_tile_watermark(draw, watermarked.size, safe_text, font, color, opacity, spacing, rotation,
-                                             shadow=shadow, stroke=stroke, stroke_width=stroke_width, stroke_color=stroke_color)
-                elif style == "diagonal":
-                    # 对角线水印
-                    print("应用对角线水印")
-                    self._apply_diagonal_watermark(draw, watermarked.size, safe_text, font, color, opacity, spacing, rotation,
-                                                 shadow=shadow, stroke=stroke, stroke_width=stroke_width, stroke_color=stroke_color)
                 else:
-                    print(f"未知水印样式: {style}，使用单个水印")
+                    print(f"使用单个水印")
                     watermark_rect = self._apply_single_watermark(draw, watermarked.size, safe_text, font, color, opacity, 
                                                 settings.get('h_position', 0.5), settings.get('v_position', 0.5), rotation,
                                                 shadow=shadow, stroke=stroke, stroke_width=stroke_width, stroke_color=stroke_color)
@@ -1278,50 +1270,9 @@ class PreviewPanel(QWidget):
     
     def _apply_tile_watermark(self, draw, image_size, text, font, color, opacity, spacing, rotation, 
                              shadow=False, stroke=False, stroke_width=2, stroke_color=(0,0,0,255)):
-        """
-        应用平铺水印
-        """
-        # 简化实现，创建多个单个水印
-        step_x = image_size[0] // 3 + spacing
-        step_y = image_size[1] // 3 + spacing
-        
-        for x in range(0, image_size[0], step_x):
-            for y in range(0, image_size[1], step_y):
-                # 计算相对位置
-                h_pos = x / image_size[0]
-                v_pos = y / image_size[1]
-                # 应用单个水印，传递文本效果参数
-                self._apply_single_watermark(draw, image_size, text, font, color, opacity, h_pos, v_pos, rotation,
-                                          shadow=shadow, stroke=stroke, stroke_width=stroke_width, stroke_color=stroke_color)
-    
-    def _apply_diagonal_watermark(self, draw, image_size, text, font, color, opacity, spacing, rotation,
-                                 shadow=False, stroke=False, stroke_width=2, stroke_color=(0,0,0,255)):
-        """
-        应用对角线水印
-        """
-        # 简化实现，沿对角线创建水印
-        # 调整旋转角度使其更适合对角线
-        adjusted_rotation = rotation + 45
-        
-        # 创建足够长的对角线覆盖
-        diagonal_length = int((image_size[0]**2 + image_size[1]**2)**0.5)
-        step = diagonal_length // 5 + spacing
-        
-        for offset in range(-diagonal_length, diagonal_length, step):
-            # 计算起点和终点
-            start_x = offset
-            start_y = 0
-            end_x = min(offset + diagonal_length, image_size[0])
-            end_y = min(diagonal_length, image_size[1])
-            
-            # 在对角线位置应用水印
-            if start_x < image_size[0] and start_y < image_size[1]:
-                h_pos = min(max(start_x / image_size[0], 0), 1)
-                v_pos = min(max(start_y / image_size[1], 0), 1)
-                # 应用单个水印，传递文本效果参数
-                self._apply_single_watermark(draw, image_size, text, font, color, opacity, h_pos, v_pos, adjusted_rotation,
-                                          shadow=shadow, stroke=stroke, stroke_width=stroke_width, stroke_color=stroke_color)
-    
+        # 水印方法已简化，只使用单个水印功能
+        pass
+
     def _is_point_in_watermark(self, pos):
         """
         判断给定位置是否在水印区域内
@@ -1334,7 +1285,7 @@ class PreviewPanel(QWidget):
         """
         # 检查watermark_rect是否存在且有效
         if not hasattr(self, 'watermark_rect') or self.watermark_rect is None:
-            print("DEBUG: 水印矩形区域不存在，根据水印设置计算默认水印区域")
+
             # 当水印矩形区域未设置时，使用水印设置计算一个更准确的默认水印区域
             if hasattr(self, 'effect_preview') and self.effect_preview:
                 try:

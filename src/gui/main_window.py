@@ -14,6 +14,8 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("照片水印工具")
+        # 设置窗口标志 - 只保留关闭按钮，移除最小化按钮
+        self.setWindowFlags(Qt.WindowCloseButtonHint)
         self.main_splitter = None  # 保存主分割器引用
         self.screen_size = None  # 保存屏幕大小
         
@@ -34,10 +36,10 @@ class MainWindow(QMainWindow):
         self.initial_right_width = 300
         
         self.init_ui()
-        # 设置窗口默认大小为屏幕大小的80%
-        self._set_default_size()
         # 连接窗口大小变化信号
         self.resizeEvent = self.on_resize
+        # 默认最大化窗口
+        self.showMaximized()
     
     def init_ui(self):
         """初始化用户界面"""
@@ -120,27 +122,16 @@ class MainWindow(QMainWindow):
     
     def _set_default_size(self):
         """
-        设置窗口默认大小为屏幕大小的80%
+        设置窗口默认大小和属性
         """
         # 获取屏幕大小
         screen = self.screen()
         self.screen_size = screen.availableSize()
         
-        # 计算80%的屏幕大小
-        default_width = int(self.screen_size.width() * 0.8)
-        default_height = int(self.screen_size.height() * 0.8)
-        
-        # 设置最小和默认大小
-        self.setMinimumSize(default_width, default_height)
-        
-        # 设置窗口大小
-        self.resize(default_width, default_height)
-        
-        # 将窗口居中显示
-        self.move(
-            int((self.screen_size.width() - default_width) / 2),
-            int((self.screen_size.height() - default_height) / 2)
-        )
+        # 设置最小大小为屏幕大小的80%
+        min_width = int(self.screen_size.width() * 0.8)
+        min_height = int(self.screen_size.height() * 0.8)
+        self.setMinimumSize(min_width, min_height)
     
     def on_resize(self, event):
         """

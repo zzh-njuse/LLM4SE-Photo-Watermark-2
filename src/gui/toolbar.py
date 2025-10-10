@@ -22,14 +22,6 @@ class Toolbar(QWidget):
         
         # 添加分隔符
         layout.addStretch()
-        
-        # 批量处理选项
-        batch_label = QLabel("批量处理:")
-        self.batch_combo = QComboBox()
-        self.batch_combo.addItems(["当前图片", "所有图片"])
-        layout.addWidget(batch_label)
-        layout.addWidget(self.batch_combo)
-        
         # 添加分隔符
         layout.addStretch()
         
@@ -51,32 +43,19 @@ class Toolbar(QWidget):
         if not hasattr(self, 'main_window'):
             return
         
-        # 获取批量处理选项
-        batch_mode = self.batch_combo.currentText()
-        
         # 获取预览面板和设置面板
         preview_panel = getattr(self.main_window, 'preview_panel', None)
         settings_panel = getattr(self.main_window, 'settings_panel', None)
-        image_list_panel = getattr(self.main_window, 'image_list_panel', None)
         
         if not preview_panel or not settings_panel:
             return
         
-        # 确定要导出的图片列表
-        if batch_mode == "当前图片":
-            # 仅导出当前图片
-            if not preview_panel.current_image_path:
-                from PyQt5.QtWidgets import QMessageBox
-                QMessageBox.warning(self, "导出失败", "没有选中的图片可供导出")
-                return
-            image_paths = [preview_panel.current_image_path]
-        else:
-            # 导出所有图片
-            if not image_list_panel or not image_list_panel.image_paths:
-                from PyQt5.QtWidgets import QMessageBox
-                QMessageBox.warning(self, "导出失败", "图片列表为空")
-                return
-            image_paths = image_list_panel.image_paths.copy()
+        # 仅导出当前图片
+        if not preview_panel.current_image_path:
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "导出失败", "没有选中的图片可供导出")
+            return
+        image_paths = [preview_panel.current_image_path]
         
         # 显示导出设置对话框
         from src.gui.export_dialog import ExportDialog
@@ -156,16 +135,25 @@ class Toolbar(QWidget):
                     output_path = FileHandler.generate_output_filename(
                         image_path, output_dir, naming_rule, prefix, suffix)
                     
-                    # 获取质量设置
-                    quality = watermark_settings['quality']
+                    # 获取质量设置和尺寸调整设置
+                    quality = export_settings.get('quality', 90)
+                    resize_type = export_settings.get('resize_type', 'original')
+                    width = export_settings.get('width')
+                    height = export_settings.get('height')
+                    percent = export_settings.get('percent')
                     
-                    # 确保在保存前转换为RGB模式，特别是对于JPEG格式
-                    if output_format in ['jpg', 'jpeg']:
-                        print(f"将图片转换为RGB模式以保存为JPEG格式")
-                        watermarked_image = ImageProcessor.convert_to_rgb(watermarked_image)
+                    # 调整图片尺寸
+                    print(f"调整图片尺寸: type={resize_type}, width={width}, height={height}, percent={percent}")
+                    watermarked_image = ImageProcessor.resize_image_by_settings(
+                        watermarked_image, 
+                        resize_type=resize_type, 
+                        width=width, 
+                        height=height, 
+                        percent=percent
+                    )
                     
-                    # 保存图片
-                    success = FileHandler.save_image(
+                    # 保存图片（包括质量设置和格式处理）
+                    success = ImageProcessor.save_image(
                         watermarked_image, output_path, output_format.upper(), quality)
                     
                     if success:
@@ -348,8 +336,8 @@ class Toolbar(QWidget):
                 font_options = [f"{settings.get('font', 'Arial')}:italic", f"{settings.get('font', 'Arial')}-Italic"]
             
             # 添加基本字体作为后备选项
-            font_names = font_options + [settings.get('font', 'Arial'), 'SimHei', 'Microsoft YaHei', 'Arial']
-            font_paths = ['C:/Windows/Fonts/simhei.ttf', 'C:/Windows/Fonts/msyh.ttf']  # Windows常见中文字体路径
+            font_names = font_options + [settings.get('font', '微软雅黑'), 'Microsoft YaHei', 'SimHei', 'Arial']
+            font_paths = ['C:/Windows/Fonts/msyh.ttf', 'C:/Windows/Fonts/simhei.ttf']  # Windows常见中文字体路径，优先微软雅黑
                 
             # 先尝试字体路径
             for font_path in font_paths:
@@ -407,18 +395,8 @@ class Toolbar(QWidget):
                     self._apply_single_watermark(draw, watermarked.size, safe_text, font, color, opacity, 
                                                 settings.get('h_position', 0.5), settings.get('v_position', 0.5), rotation,
                                                 shadow=shadow, stroke=stroke, stroke_width=stroke_width, stroke_color=stroke_color)
-                elif style == "tile":
-                    # 平铺水印
-                    print("应用平铺水印")
-                    self._apply_tile_watermark(draw, watermarked.size, safe_text, font, color, opacity, spacing, rotation,
-                                             shadow=shadow, stroke=stroke, stroke_width=stroke_width, stroke_color=stroke_color)
-                elif style == "diagonal":
-                    # 对角线水印
-                    print("应用对角线水印")
-                    self._apply_diagonal_watermark(draw, watermarked.size, safe_text, font, color, opacity, spacing, rotation,
-                                                 shadow=shadow, stroke=stroke, stroke_width=stroke_width, stroke_color=stroke_color)
                 else:
-                    print(f"未知水印样式: {style}，使用单个水印")
+                    print(f"使用单个水印")
                     self._apply_single_watermark(draw, watermarked.size, safe_text, font, color, opacity, 
                                                 settings.get('h_position', 0.5), settings.get('v_position', 0.5), rotation,
                                                 shadow=shadow, stroke=stroke, stroke_width=stroke_width, stroke_color=stroke_color)
@@ -628,49 +606,3 @@ class Toolbar(QWidget):
                     print("备用方案：直接在原图绘制成功")
                 except Exception as e3:
                     print(f"备用方案也失败: {type(e3).__name__}: {e3}")
-    
-    def _apply_tile_watermark(self, draw, image_size, text, font, color, opacity, spacing, rotation, 
-                             shadow=False, stroke=False, stroke_width=2, stroke_color=(0,0,0,255)):
-        """
-        应用平铺水印
-        """
-        # 简化实现，创建多个单个水印
-        step_x = image_size[0] // 3 + spacing
-        step_y = image_size[1] // 3 + spacing
-        
-        for x in range(0, image_size[0], step_x):
-            for y in range(0, image_size[1], step_y):
-                # 计算相对位置
-                h_pos = x / image_size[0]
-                v_pos = y / image_size[1]
-                # 应用单个水印，传递文本效果参数
-                self._apply_single_watermark(draw, image_size, text, font, color, opacity, h_pos, v_pos, rotation,
-                                          shadow=shadow, stroke=stroke, stroke_width=stroke_width, stroke_color=stroke_color)
-    
-    def _apply_diagonal_watermark(self, draw, image_size, text, font, color, opacity, spacing, rotation,
-                                 shadow=False, stroke=False, stroke_width=2, stroke_color=(0,0,0,255)):
-        """
-        应用对角线水印
-        """
-        # 简化实现，沿对角线创建水印
-        # 调整旋转角度使其更适合对角线
-        adjusted_rotation = rotation + 45
-        
-        # 创建足够长的对角线覆盖
-        diagonal_length = int((image_size[0]**2 + image_size[1]** 2)**0.5)
-        step = diagonal_length // 5 + spacing
-        
-        for offset in range(-diagonal_length, diagonal_length, step):
-            # 计算起点和终点
-            start_x = offset
-            start_y = 0
-            end_x = min(offset + diagonal_length, image_size[0])
-            end_y = min(diagonal_length, image_size[1])
-            
-            # 在对角线位置应用水印
-            if start_x < image_size[0] and start_y < image_size[1]:
-                h_pos = min(max(start_x / image_size[0], 0), 1)
-                v_pos = min(max(start_y / image_size[1], 0), 1)
-                # 应用单个水印，传递文本效果参数
-                self._apply_single_watermark(draw, image_size, text, font, color, opacity, h_pos, v_pos, adjusted_rotation,
-                                          shadow=shadow, stroke=stroke, stroke_width=stroke_width, stroke_color=stroke_color)

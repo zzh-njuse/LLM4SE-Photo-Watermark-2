@@ -320,17 +320,6 @@ class SettingsPanel(QWidget):
         font_group = QGroupBox("文本设置")
         font_group_layout = QVBoxLayout()
         
-        # 字体选择
-        font_layout = QHBoxLayout()
-        font_label = QLabel("字体")
-        self.font_combo = QComboBox()
-        # 添加更多常用字体
-        self.font_combo.addItems(["微软雅黑", "宋体", "黑体", "Arial", "Times New Roman", 
-                                 "SimSun", "SimHei", "KaiTi", "Courier New", "Verdana"])
-        font_layout.addWidget(font_label, 1)
-        font_layout.addWidget(self.font_combo, 2)
-        font_group_layout.addLayout(font_layout)
-        
         # 字体样式（粗体、斜体）
         style_layout = QHBoxLayout()
         style_label = QLabel("样式")
@@ -351,9 +340,15 @@ class SettingsPanel(QWidget):
             self.italic_checkbox.clicked.connect(self._on_settings_change)
         elif hasattr(self, '_on_position_change'):
             self.italic_checkbox.clicked.connect(self._on_position_change)
+        
+        # 添加斜体功能提示标签
+        italic_hint = QLabel("斜体仅能使用白色")
+        italic_hint.setStyleSheet("color: #999999; font-size: 10px;")
+        
         style_layout.addWidget(style_label, 1)
         style_layout.addWidget(self.bold_checkbox)
         style_layout.addWidget(self.italic_checkbox)
+        style_layout.addWidget(italic_hint, 2)
         style_layout.addStretch(1)
         font_group_layout.addLayout(style_layout)
         
@@ -532,60 +527,10 @@ class SettingsPanel(QWidget):
         # 设置组布局
         position_group.setLayout(position_group_layout)
         layout.addWidget(position_group)
-        
-        # 水印样式
-        style_group = QGroupBox("水印样式")
-        style_layout = QVBoxLayout()
-        
-        self.single_radio = QRadioButton("单个水印")
-        self.single_radio.setChecked(True)
-        self.tile_radio = QRadioButton("平铺水印")
-        self.diagonal_radio = QRadioButton("对角线水印")
-        
-        style_layout.addWidget(self.single_radio)
-        style_layout.addWidget(self.tile_radio)
-        style_layout.addWidget(self.diagonal_radio)
-        
-        # 水印间距（仅在平铺或对角线模式下有效）
-        spacing_layout = QHBoxLayout()
-        spacing_label = QLabel("水印间距")
-        self.spacing_slider = QSlider(Qt.Horizontal)
-        self.spacing_slider.setRange(10, 200)
-        self.spacing_slider.setValue(50)
-        self.spacing_value = QLabel("50px")
-        self.spacing_slider.valueChanged.connect(lambda value: self.spacing_value.setText(f"{value}px"))
-        
-        spacing_layout.addWidget(spacing_label, 1)
-        spacing_layout.addWidget(self.spacing_slider, 2)
-        spacing_layout.addWidget(self.spacing_value, 1)
-        style_layout.addLayout(spacing_layout)
-        
-        style_group.setLayout(style_layout)
-        layout.addWidget(style_group)
     
     def _add_output_settings(self, layout):
         """添加输出相关设置"""
-        # 输出格式
-        format_layout = QHBoxLayout()
-        format_label = QLabel("输出格式")
-        self.format_combo = QComboBox()
-        self.format_combo.addItems(["PNG", "JPEG"])
-        format_layout.addWidget(format_label, 1)
-        format_layout.addWidget(self.format_combo, 2)
-        layout.addLayout(format_layout)
-        
-        # 图片质量
-        quality_layout = QHBoxLayout()
-        quality_label = QLabel("图片质量")
-        self.quality_slider = QSlider(Qt.Horizontal)
-        self.quality_slider.setRange(0, 100)
-        self.quality_slider.setValue(90)
-        self.quality_value = QLabel("90%")
-        self.quality_slider.valueChanged.connect(lambda value: self.quality_value.setText(f"{value}%"))
-        quality_layout.addWidget(quality_label, 1)
-        quality_layout.addWidget(self.quality_slider, 2)
-        quality_layout.addWidget(self.quality_value, 1)
-        layout.addLayout(quality_layout)
+        # 输出格式和图片质量设置已移至导出面板
     
     def select_color(self):
         """选择水印颜色"""
@@ -632,7 +577,7 @@ class SettingsPanel(QWidget):
         font_size = settings.get('size', 30)
         opacity = int(settings.get('opacity', 0.5) * 255)  # 转换为0-255范围
         color_str = settings.get('color', '#FFFFFF')
-        font_name = settings.get('font', 'SimHei')  # 默认使用中文字体
+        font_name = settings.get('font', '微软雅黑')  # 默认使用中文字体
         bold = settings.get('bold', False)
         italic = settings.get('italic', False)
         shadow = settings.get('shadow', False)
@@ -704,7 +649,7 @@ class SettingsPanel(QWidget):
             font_options = [f"{font_name}:italic", f"{font_name}-Italic"]
         
         # 优先使用中文字体
-        chinese_fonts = ['SimHei', 'Microsoft YaHei', 'Arial Unicode MS', 'Arial']
+        chinese_fonts = ['微软雅黑', 'Microsoft YaHei', 'SimHei', 'Arial Unicode MS', 'Arial']
         
         # 字体加载策略：先尝试带有样式的字体选项，再尝试用户指定的字体，最后尝试中文字体列表
         font_to_try = font_options.copy()
@@ -943,70 +888,52 @@ class SettingsPanel(QWidget):
                         draw.text((adjusted_x, adjusted_y - offset), text, font=font, fill=stroke_fill)
                         draw.text((adjusted_x, adjusted_y + offset), text, font=font, fill=stroke_fill)
             
-            # 应用粗体效果
-            if bold:
-                print("应用粗体效果")
-                bold_offset = 1
-                if italic:
-                    # 斜体文本的粗体：使用临时图像和仿射变换
-                    text_width, text_height = font.getsize(text)
-                    bold_img = Image.new('RGBA', (text_width + 20, text_height + 20), (255, 255, 255, 0))
-                    bold_draw = ImageDraw.Draw(bold_img)
-                    # 先绘制粗体效果到临时图像
-                    for dx, dy in [(bold_offset, 0), (-bold_offset, 0), (0, bold_offset), (0, -bold_offset)]:
-                        bold_draw.text((10 + dx, 10 + dy), text, font=font, fill=fill)
-                    # 应用斜体变换
-                    italic_skew = 0.2
-                    width, height = bold_img.size
-                    italic_bold = bold_img.transform(
-                        (width + int(height * italic_skew), height),
-                        Image.AFFINE,
-                        (1, italic_skew, 0, 0, 1, 0),
-                        fillcolor=(255, 255, 255, 0)
-                    )
-                    # 粘贴斜体粗体到主图像
-                    draw.bitmap((adjusted_x, adjusted_y), italic_bold, fill=None)
-                else:
-                    # 正常文本的粗体
-                    # 在相邻位置绘制文本
-                    for dx, dy in [(bold_offset, 0), (-bold_offset, 0), (0, bold_offset), (0, -bold_offset)]:
-                        draw.text((adjusted_x + dx, adjusted_y + dy), text, font=font, fill=fill)
-            
-            # 绘制主文本
-            print("绘制主文本")
+            # 绘制文本（结合斜体和粗体效果）
+            print("绘制文本（结合效果）")
             if italic:
-                # 正确的斜体效果实现：使用Image的transform方法创建倾斜效果
+                # 斜体文本处理（包含粗体效果）
                 # 首先计算文本尺寸
                 text_width, text_height = font.getsize(text)
                 # 创建一个临时图像来绘制文本
                 temp_img = Image.new('RGBA', (text_width + 20, text_height + 20), (255, 255, 255, 0))
                 temp_draw = ImageDraw.Draw(temp_img)
-                # 绘制文本到临时图像
+                
+                # 如果需要粗体，先绘制粗体效果
+                if bold:
+                    print("应用斜体+粗体效果")
+                    bold_offset = 1
+                    # 在临时图像上绘制粗体效果
+                    for dx, dy in [(bold_offset, 0), (-bold_offset, 0), (0, bold_offset), (0, -bold_offset)]:
+                        temp_draw.text((10 + dx, 10 + dy), text, font=font, fill=fill)
+                
+                # 绘制主文本到临时图像
                 temp_draw.text((10, 10), text, font=font, fill=fill)
+                
                 # 创建斜体变换矩阵（向右倾斜）
                 italic_skew = 0.2  # 斜体倾斜系数
                 # 计算变换参数
                 width, height = temp_img.size
                 # 使用仿射变换创建斜体效果
-                # 斜切变换矩阵: [1, skew, 0, 0, 1, 0]
                 italic_img = temp_img.transform(
                     (width + int(height * italic_skew), height),
                     Image.AFFINE,
                     (1, italic_skew, 0, 0, 1, 0),
                     fillcolor=(255, 255, 255, 0)
                 )
+                
                 # 粘贴斜体文本到主图像
-                # 先获取主图像的模式
-                main_mode = draw.im.mode
-                # 如果主图像不是RGBA模式，需要先转换
-                if main_mode != 'RGBA':
-                    # 使用paste方法而不是bitmap以支持透明度
-                    draw.im.paste(italic_img, (adjusted_x, adjusted_y), italic_img)
-                else:
-                    # RGBA模式下直接绘制
-                    draw.bitmap((adjusted_x, adjusted_y), italic_img, fill=None)
+                draw.bitmap((adjusted_x, adjusted_y), italic_img, fill=None)
             else:
-                # 正常文本
+                # 非斜体文本处理
+                # 如果需要粗体，先绘制粗体效果
+                if bold:
+                    print("应用粗体效果")
+                    bold_offset = 1
+                    # 在相邻位置绘制文本
+                    for dx, dy in [(bold_offset, 0), (-bold_offset, 0), (0, bold_offset), (0, -bold_offset)]:
+                        draw.text((adjusted_x + dx, adjusted_y + dy), text, font=font, fill=fill)
+                
+                # 绘制主文本
                 draw.text((adjusted_x, adjusted_y), text, font=font, fill=fill)
             print("文本绘制完成")
         except Exception as e:
@@ -1076,13 +1003,11 @@ class SettingsPanel(QWidget):
             'opacity': self.opacity_slider.value() / 100.0 if hasattr(self, 'opacity_slider') else 0.5,
             'rotation': self.rotation_slider.value() if hasattr(self, 'rotation_slider') else 0,
             'color': self.color_value.text() if hasattr(self, 'color_value') else '#FFFFFF',
-            'font': self.font_combo.currentText() if hasattr(self, 'font_combo') else '微软雅黑',
+            'font': '微软雅黑',  # 使用固定默认字体，不再从界面获取
             'h_position': self.h_position_slider.value() / 100.0 if hasattr(self, 'h_position_slider') else 0.5,
             'v_position': self.v_position_slider.value() / 100.0 if hasattr(self, 'v_position_slider') else 0.5,
             'style': 'single',
             'spacing': self.spacing_slider.value() if hasattr(self, 'spacing_slider') else 50,
-            'format': self.format_combo.currentText() if hasattr(self, 'format_combo') else 'PNG',
-            'quality': self.quality_slider.value() if hasattr(self, 'quality_slider') else 90,
             # 新增高级文本设置
             'bold': self.bold_checkbox.isChecked() if hasattr(self, 'bold_checkbox') else False,
             'italic': self.italic_checkbox.isChecked() if hasattr(self, 'italic_checkbox') else False,
