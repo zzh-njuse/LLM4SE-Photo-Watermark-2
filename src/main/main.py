@@ -14,8 +14,11 @@ print(f"区域设置: {locale.getpreferredencoding()}")
 os.environ['PYTHONIOENCODING'] = 'utf-8'
 
 # 强制使用UTF-8编码，添加errors='replace'以避免打印时的编码错误
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+# 添加检查，确保stdout和stderr不为None（在--windowed模式下可能为None）
+if sys.stdout is not None:
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+if sys.stderr is not None:
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 # 导入必要的模块
 from PyQt5.QtWidgets import QApplication
